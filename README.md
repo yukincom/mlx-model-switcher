@@ -105,7 +105,7 @@ custom_providers:
 
 - Apple Silicon + MLX専用
 - 大規模モデルはUnified Memoryを十分に確保してください
-- 現在はlocalhost専用です
+- localhost専用です
 
 ---
 
