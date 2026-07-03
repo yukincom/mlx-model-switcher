@@ -1,4 +1,3 @@
-```markdown
 # MLX Server 起動スクリプト（モデル切り替え対応版）
 
 Apple Silicon（MLX）向け**ローカルLLMサーバー**を快適に運用するためのBash起動スクリプトです。
