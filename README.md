@@ -1,10 +1,11 @@
-```markdown
 # MLX Server 起動スクリプト（モデル切り替え対応版）
 
 Apple Silicon（MLX）向け**ローカルLLMサーバー**を快適に運用するためのBash起動スクリプトです。
 
 矢印キーだけでモデルを選択できる対話型メニューと、`models.conf`によるエイリアス管理で、複数のモデルをサクサク切り替えられます。  
 **Hermes Agent**からモデルの切り替えができます。
+
+![sample.png](https://github.com/yukincom/mlx-model-switcher/blob/main/sample.png)
 
 ---
 
