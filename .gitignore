@@ -188,6 +188,7 @@ cython_debug/
 *.safetensors
 *.gguf
 *.bin
+models.conf
 
 # Hugging Face キャッシュ（万が一プロジェクト内に紛れ込んだ場合の保険）
 **/huggingface/hub/
