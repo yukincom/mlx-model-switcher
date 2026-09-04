@@ -45,7 +45,7 @@ pip install mlx-lm
 # ==============================================
 
 # --- メイン運用モデル（推奨） ---
-Qwen3.6-35B-A3B-4bit-DWQ=mlx-community/Qwen3.6-35B-A3B-4bit-DWQ
+Qwen3.8-27B-8bit=mlx-community/Qwen3.8-27B-8bit
 
 # ローカルパスも利用可能
 my-model=/absolute/path/to/model
@@ -64,17 +64,17 @@ my-model=/absolute/path/to/model
 custom_providers:
   - name: local-llm
     base_url: http://localhost:8080/v1
-    model: mlx-community/Qwen3.6-35B-A3B-4bit-DWQ   # デフォルトモデル
+    model: mlx-community/Qwen3.8-27B-8bit   # デフォルトモデル
     api_mode: chat_completions
     models:
-      mlx-community/Qwen3.6-35B-A3B-4bit-DWQ:
-        context_length: 65536
+      mlx-community/Qwen3.8-27B-8bit:
+        context_length: 32768
         max_tokens: 8192
 ```
 
 **ポイント**
 - `models:` 配下のキーは **Hugging Face上のモデル名**（mlx-community/...）を使う
-- `context_length: 65536` は実機で長文入力を確認した、現在の安定運用値
+- Qwen3.8-27B-8bitは`context_length: 32768`から開始し、実機検証後に65536へ広げる
 - スクリプトも同じHugging Face IDをサーバーへ渡すため、最初のリクエストで同じモデルを再ロードしません
 - モデル取得はサーバープロセス内だけオフライン固定です。切り替え先は事前にダウンロードしてください
 
@@ -87,7 +87,10 @@ custom_providers:
 ./start_server.sh
 
 # 直接指定して起動
-./start_server.sh Qwen3.6-35B-A3B-4bit-DWQ
+./start_server.sh Qwen3.8-27B-8bit
+
+# コーディングや難しい判断でThinkingを使う
+MLX_THINKING=medium ./start_server.sh Qwen3.8-27B-8bit
 
 # 一覧表示
 ./start_server.sh list
@@ -100,14 +103,16 @@ custom_providers:
 現在の標準値：
 
 - リクエストで省略した場合の出力値: 8192 tokens
-- クライアント側コンテキスト目標: 65536 tokens
-- 同時生成: 2、同時プロンプト読み込み: 1
+- クライアント側コンテキスト目標: 通常65536、Qwen3.8-27Bは32768 tokens
+- 同時生成: 通常2、Qwen3.8-27Bは1。同時プロンプト読み込みは1
 - 長文の読み込み単位: 512 tokens
-- プロンプトキャッシュ上限: 4GB
+- プロンプトキャッシュ上限: 通常4GB、Qwen3.8-27Bは2GB
 - 接続先: `127.0.0.1:8080`
-- Thinking: 無効
+- Thinking: 無効（既定）。Qwen3.8は`MLX_THINKING=low|medium|xhigh`で切り替え可能
 
-一時的に変更する場合は、`MLX_PORT`、`MLX_MAX_TOKENS`、`MLX_DECODE_CONCURRENCY`、`MLX_PROMPT_CONCURRENCY`、`MLX_PREFILL_STEP_SIZE`、`MLX_PROMPT_CACHE_BYTES`などの環境変数を利用できます。`MLX_MAX_TOKENS`はサーバーの既定値で、APIリクエストに対する強制上限ではありません。
+一時的に変更する場合は、`MLX_PORT`、`MLX_MAX_TOKENS`、`MLX_DECODE_CONCURRENCY`、`MLX_PROMPT_CONCURRENCY`、`MLX_PREFILL_STEP_SIZE`、`MLX_PROMPT_CACHE_BYTES`、`MLX_THINKING`などの環境変数を利用できます。`MLX_MAX_TOKENS`はサーバーの既定値で、APIリクエストに対する強制上限ではありません。
+
+Qwen3.8の公式チャットテンプレートはXML形式のツール呼び出しを生成し、対応するMLX-LMはそれをOpenAI互換の`tool_calls`へ変換します。Hermesのツール実行にはこの変換が必要ですが、PC操作の権限や確認ルールを変更するものではありません。モデル更新後は実際のツール呼び出しまで確認してください。
 
 ---
 

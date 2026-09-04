@@ -17,11 +17,9 @@ PORT="${MLX_PORT:-8080}"
 
 # ---- 安全・パフォーマンス設定（環境変数で一時上書き可能） ----
 DEFAULT_MAX_TOKENS="${MLX_MAX_TOKENS:-8192}"
-CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-65536}"
-DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-2}"
 PROMPT_CONCURRENCY="${MLX_PROMPT_CONCURRENCY:-1}"
 PREFILL_STEP_SIZE="${MLX_PREFILL_STEP_SIZE:-512}"
-PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-4GB}"
+THINKING_MODE="${MLX_THINKING:-off}"
 ALLOWED_ORIGINS="${MLX_ALLOWED_ORIGINS:-http://127.0.0.1:${PORT},http://localhost:${PORT}}"
 
 CURSOR_HIDDEN=0
@@ -48,6 +46,12 @@ usage() {
   ./start_server.sh <エイリアス名>  指定モデルで起動
   ./start_server.sh list             登録モデル一覧を表示
   ./start_server.sh --help           この説明を表示
+
+Qwen3.8 Thinking設定:
+  MLX_THINKING=off     通常のHermesエージェント運用（既定）
+  MLX_THINKING=low     短い推論
+  MLX_THINKING=medium  コーディング向け推論
+  MLX_THINKING=xhigh   深い推論
 EOF
 }
 
@@ -268,6 +272,40 @@ if ! MODEL_REF="$(find_model_ref "$ALIAS")"; then
   exit 1
 fi
 
+MODEL_IS_QWEN38=0
+case "$MODEL_REF" in
+  *Qwen3.8-27B*) MODEL_IS_QWEN38=1 ;;
+esac
+
+# 27B dense 8bitは品質を優先しつつ、64GB Unified MemoryにKV cacheと
+# Hermes本体の余裕を残す。明示した環境変数は常にこちらより優先する。
+if [ "$MODEL_IS_QWEN38" -eq 1 ]; then
+  CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-32768}"
+  DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-1}"
+  PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-2GB}"
+else
+  CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-65536}"
+  DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-2}"
+  PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-4GB}"
+fi
+
+case "$THINKING_MODE" in
+  off)
+    CHAT_TEMPLATE_ARGS='{"enable_thinking":false,"preserve_thinking":false}'
+    ;;
+  low|medium|xhigh)
+    if [ "$MODEL_IS_QWEN38" -ne 1 ]; then
+      echo "❌ MLX_THINKING=${THINKING_MODE} はQwen3.8-27B用です" >&2
+      exit 1
+    fi
+    CHAT_TEMPLATE_ARGS="{\"enable_thinking\":true,\"reasoning_effort\":\"${THINKING_MODE}\",\"preserve_thinking\":false}"
+    ;;
+  *)
+    echo "❌ MLX_THINKING は off, low, medium, xhigh のいずれかを指定してください: ${THINKING_MODE}" >&2
+    exit 1
+    ;;
+esac
+
 MODEL_ARGUMENT=""
 MODEL_LOCAL_PATH=""
 MODEL_REF_IS_LOCAL=0
@@ -364,7 +402,7 @@ echo "   Concurrency:           decode=${DECODE_CONCURRENCY}, prompt=${PROMPT_CO
 echo "   Prefill step:          ${PREFILL_STEP_SIZE}"
 echo "   Prompt cache limit:    ${PROMPT_CACHE_BYTES}"
 echo "   Allowed origins:       ${ALLOWED_ORIGINS}"
-echo "   Thinking:              disabled"
+echo "   Thinking:              ${THINKING_MODE}"
 echo "   Network model access:  disabled (local cache only)"
 
 # サーバーだけをオフライン化する。Yunoやドギドの環境には波及しない。
@@ -381,4 +419,4 @@ exec env \
     --prompt-concurrency "${PROMPT_CONCURRENCY}" \
     --prefill-step-size "${PREFILL_STEP_SIZE}" \
     --prompt-cache-bytes "${PROMPT_CACHE_BYTES}" \
-    --chat-template-args '{"enable_thinking": false}'
+    --chat-template-args "${CHAT_TEMPLATE_ARGS}"
