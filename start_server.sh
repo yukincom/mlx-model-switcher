@@ -280,7 +280,8 @@ esac
 # 27B dense 8bitは品質を優先しつつ、64GB Unified MemoryにKV cacheと
 # Hermes本体の余裕を残す。明示した環境変数は常にこちらより優先する。
 if [ "$MODEL_IS_QWEN38" -eq 1 ]; then
-  CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-32768}"
+  # 配布モデルのtext_config.max_position_embeddingsと一致させる。
+  CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-262144}"
   DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-1}"
   PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-2GB}"
 else

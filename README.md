@@ -68,13 +68,13 @@ custom_providers:
     api_mode: chat_completions
     models:
       mlx-community/Qwen3.8-27B-8bit:
-        context_length: 32768
+        context_length: 262144
         max_tokens: 8192
 ```
 
 **ポイント**
 - `models:` 配下のキーは **Hugging Face上のモデル名**（mlx-community/...）を使う
-- Qwen3.8-27B-8bitは`context_length: 32768`から開始し、実機検証後に65536へ広げる
+- Qwen3.8-27B-8bitの`context_length: 262144`は配布モデルの`text_config.max_position_embeddings`に合わせる。Hermesの最低条件は64,000 tokensであり、モデル自体の上限とは異なる。全長での実行速度・メモリ使用量は実機検証が必要
 - スクリプトも同じHugging Face IDをサーバーへ渡すため、最初のリクエストで同じモデルを再ロードしません
 - モデル取得はサーバープロセス内だけオフライン固定です。切り替え先は事前にダウンロードしてください
 
@@ -103,7 +103,7 @@ MLX_THINKING=medium ./start_server.sh Qwen3.8-27B-8bit
 現在の標準値：
 
 - リクエストで省略した場合の出力値: 8192 tokens
-- クライアント側コンテキスト目標: 通常65536、Qwen3.8-27Bは32768 tokens
+- クライアント側コンテキスト目標: 通常65536、Qwen3.8-27Bはモデル仕様に合わせた262144 tokens
 - 同時生成: 通常2、Qwen3.8-27Bは1。同時プロンプト読み込みは1
 - 長文の読み込み単位: 512 tokens
 - プロンプトキャッシュ上限: 通常4GB、Qwen3.8-27Bは2GB
