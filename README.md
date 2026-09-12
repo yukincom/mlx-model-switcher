@@ -157,32 +157,11 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 - 標準ではlocalhost専用です。外部公開は`MLX_HOST`だけではできず、`MLX_ALLOW_REMOTE=1`も必要です
 - ブラウザからのCORSは同じlocalhostのサーバーoriginだけを標準で許可します。別ポートのUIを直結する場合は`MLX_ALLOWED_ORIGINS`へ追加してください
 - `models.conf`は起動用エイリアスであり、APIリクエストのモデル許可リストではありません。信頼できるローカルクライアント専用です
-- パソコン操作エージェントの安全境界はこのサーバーではなく、エージェント側の権限・確認・ツール制限で設けてください
-- `context_length`はMLXサーバーの起動引数ではなく、Hermesなど各クライアント側でも設定してください
-- 設定変更は次回のサーバー起動から反映されます
-
----
-
-## ✅ CI・テスト
-
-GitHub Actionsで、push・Pull Request・手動実行時にLinuxとmacOSの両方で次を確認します。
-
-- `/bin/bash`による起動スクリプトの構文チェック
-- モデル一覧、引数、空白を含むパスの処理
-- Hugging Faceキャッシュの解決と、不完全・曖昧なキャッシュの拒否
-- 起動引数、オフライン設定、設定値の検証
-
-ローカルでもPython標準ライブラリだけで実行できます。
-
-```bash
-/bin/bash -n start_server.sh
-python3 -m unittest discover -s tests -v
-```
-
-テストは一時ディレクトリ内のダミーモデルと代替サーバーコマンドを使用します。モデルのダウンロードや実際のサーバー起動は行いません。MLXによる推論速度・音声・各アプリや実機との接続はCIの検証対象外です。
 
 ---
 
 ## 📄 License
 
 MIT License
+
+開発に参加する方は [開発者向けガイド](CONTRIBUTING.md) を参照してください。
