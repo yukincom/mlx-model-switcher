@@ -18,6 +18,7 @@ def measure(base_url: str, payload: dict, timeout: float = 180) -> dict:
     last_token = None
     usage = None
     finish_reason = None
+    done = False
     with urlopen(Request(base_url.rstrip("/") + "/chat/completions", data=encoded,
                          headers={"Content-Type": "application/json"}), timeout=timeout) as response:
         headers_at = time.perf_counter()
@@ -26,6 +27,7 @@ def measure(base_url: str, payload: dict, timeout: float = 180) -> dict:
                 continue
             data = line[5:].strip()
             if data == b"[DONE]":
+                done = True
                 break
             event = json.loads(data)
             now = time.perf_counter()
@@ -43,6 +45,8 @@ def measure(base_url: str, payload: dict, timeout: float = 180) -> dict:
                 if delta.get("content"):
                     first_content = first_content or now
                 finish_reason = choice.get("finish_reason") or finish_reason
+    if not done:
+        raise RuntimeError("Stream ended without a completion marker")
     ended = time.perf_counter()
 
     def elapsed(point):

@@ -51,6 +51,12 @@ class ProbeTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Server returned an error event"):
                 measure("http://localhost/v1", {})
 
+    def test_truncated_stream_is_not_a_successful_measurement(self):
+        response = io.BytesIO(b'data: {"choices": [{"delta": {"content": "partial"}}]}\n\n')
+        with patch("tools.probe_ttft.urlopen", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "without a completion marker"):
+                measure("http://localhost/v1", {})
+
 
 if __name__ == "__main__":
     unittest.main()
