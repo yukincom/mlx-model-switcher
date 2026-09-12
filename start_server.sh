@@ -284,9 +284,9 @@ if [ "$MODEL_IS_QWEN38" -eq 1 ]; then
   # 配布モデルのtext_config.max_position_embeddingsと一致させる。
   CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-262144}"
   DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-1}"
-  # Hermesの約23K tokensの共通prefixと処理中cacheを両方残す。
-  # 2GBでは片方だけで約1.7GBを使い、次の会話で全入力を再処理していた。
-  PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-4GB}"
+  # 共通prefix約1.7GBに加え、会話・振り返りの分岐と処理中cacheを保持する。
+  # 4GBでも分岐の増加と複数prefixの併存で共通入力が追い出された。
+  PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-8GB}"
 else
   CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-65536}"
   DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-2}"
