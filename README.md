@@ -1,9 +1,11 @@
 # MLX Server 起動スクリプト（モデル切り替え対応版）
 
+[![CI](https://github.com/yukincom/mlx-model-switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/yukincom/mlx-model-switcher/actions/workflows/ci.yml)
+
 Apple Silicon（MLX）向け**ローカルLLMサーバー**を快適に運用するためのBash起動スクリプトです。
 
 矢印キーだけでモデルを選択できる対話型メニューと、`models.conf`によるエイリアス管理で、複数のモデルを切り替えられます。
-OpenAI互換APIとして、**Hermes Agent**などのローカルクライアントから利用できます。
+OpenAI互換APIとして、**Hermes Agent、ドギド、ユノ、ニャムルなどの関連プロジェクト**や、外部LLMの接続先を設定できるアプリから利用できます。
 
 ![sample.png](https://github.com/yukincom/mlx-model-switcher/blob/main/sample.png)
 
@@ -80,6 +82,43 @@ custom_providers:
 
 ---
 
+## 🤝 関連プロジェクトから共有する
+
+1つのMLXサーバーを起動し、各アプリのLLM接続先を同じAPIへ向けることで、同じモデルをプロジェクトごとにロードする必要がなくなります。
+
+| プロジェクト | 共有できるLLM処理の例 |
+| --- | --- |
+| Hermes Agent | 雑談、日記、エージェントのテキスト生成 |
+| ドギド（DokiDoki-Dogido） | Minecraft内の会話、行動計画、川柳の生成 |
+| ユノ／スタックちゃん | M5Stackとの会話、会話履歴の要約 |
+| ニャムル（Comic Image Hub） | 漫画制作を補助するテキスト処理 |
+
+### 接続の手順
+
+1. このスクリプトで共有するモデルを一度起動します。
+2. 各アプリの外部LLM／共有サーバーモードを選び、Base URLを`http://127.0.0.1:8080/v1`に設定します。
+3. リクエストの`model`には、起動したモデルと同じHugging Face ID（ローカルモデルの場合は起動時のモデルパス）を指定します。`models.conf`の左辺のエイリアスは起動スクリプト専用です。
+4. 各アプリ側のモデル読み込みやLLMサーバー自動起動・終了を無効にします。共有サーバーは起動したターミナルで管理し、終了は`Ctrl+C`で行います。
+
+たとえば、上の設定例のモデルを起動した後は、次のリクエストで接続できます。
+
+```bash
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "mlx-community/Qwen3.6-35B-A3B-4bit-DWQ",
+    "messages": [{"role": "user", "content": "こんにちは！"}],
+    "max_tokens": 128,
+    "stream": true
+  }'
+```
+
+各アプリの接続設定名は異なります。このリポジトリが提供するのはMLXサーバーの起動部分で、各アプリの連携コードは含みません。単体配布用の内蔵サーバー機能は残し、共有モードと切り替えられる構成にできます。
+
+共有の対象はLLMです。カメラ用VLM、画像生成、VOICEVOX、Whisper、M5Stackへの音声送信・再生は、それぞれ別に管理します。また、アプリ別の優先順位やタイムアウト調整はこのスクリプトでは行いません。同時利用時の待ち時間は、各アプリとサーバーの同時実行設定に応じて確認してください。
+
+---
+
 ## 🚀 使い方
 
 ```bash
@@ -121,6 +160,26 @@ custom_providers:
 - パソコン操作エージェントの安全境界はこのサーバーではなく、エージェント側の権限・確認・ツール制限で設けてください
 - `context_length`はMLXサーバーの起動引数ではなく、Hermesなど各クライアント側でも設定してください
 - 設定変更は次回のサーバー起動から反映されます
+
+---
+
+## ✅ CI・テスト
+
+GitHub Actionsで、push・Pull Request・手動実行時にLinuxとmacOSの両方で次を確認します。
+
+- `/bin/bash`による起動スクリプトの構文チェック
+- モデル一覧、引数、空白を含むパスの処理
+- Hugging Faceキャッシュの解決と、不完全・曖昧なキャッシュの拒否
+- 起動引数、オフライン設定、設定値の検証
+
+ローカルでもPython標準ライブラリだけで実行できます。
+
+```bash
+/bin/bash -n start_server.sh
+python3 -m unittest discover -s tests -v
+```
+
+テストは一時ディレクトリ内のダミーモデルと代替サーバーコマンドを使用します。モデルのダウンロードや実際のサーバー起動は行いません。MLXによる推論速度・音声・各アプリや実機との接続はCIの検証対象外です。
 
 ---
 
