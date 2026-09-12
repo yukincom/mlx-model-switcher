@@ -146,7 +146,6 @@ curl http://127.0.0.1:8080/v1/chat/completions \
 ## 📌 注意事項
 
 - Apple Silicon + MLX専用
-- 大規模モデルはUnified Memoryを十分に確保してください
 - 標準ではlocalhost専用です。外部公開は`MLX_HOST`だけではできず、`MLX_ALLOW_REMOTE=1`も必要です
 - ブラウザからのCORSは同じlocalhostのサーバーoriginだけを標準で許可します。別ポートのUIを直結する場合は`MLX_ALLOWED_ORIGINS`へ追加してください
 - `models.conf`は起動用エイリアスであり、APIリクエストのモデル許可リストではありません。信頼できるローカルクライアント専用です
