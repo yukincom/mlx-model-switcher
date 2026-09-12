@@ -105,14 +105,33 @@ MLX_THINKING=medium ./start_server.sh Qwen3.8-27B-8bit
 - リクエストで省略した場合の出力値: 8192 tokens
 - クライアント側コンテキスト目標: 通常65536、Qwen3.8-27Bはモデル仕様に合わせた262144 tokens
 - 同時生成: 通常2、Qwen3.8-27Bは1。同時プロンプト読み込みは1
-- 長文の読み込み単位: 512 tokens
-- プロンプトキャッシュ上限: 通常4GB、Qwen3.8-27Bは2GB
+- 長文の読み込み単位: 2048 tokens（mlx-lm 0.31.3の標準値）
+- プロンプトキャッシュ容量設定: 4GB。Qwen3.8でも共通入力と処理中のキャッシュを保持する
 - 接続先: `127.0.0.1:8080`
 - Thinking: 無効（既定）。Qwen3.8は`MLX_THINKING=low|medium|xhigh`で切り替え可能
 
 一時的に変更する場合は、`MLX_PORT`、`MLX_MAX_TOKENS`、`MLX_DECODE_CONCURRENCY`、`MLX_PROMPT_CONCURRENCY`、`MLX_PREFILL_STEP_SIZE`、`MLX_PROMPT_CACHE_BYTES`、`MLX_THINKING`などの環境変数を利用できます。`MLX_MAX_TOKENS`はサーバーの既定値で、APIリクエストに対する強制上限ではありません。
 
 Qwen3.8の公式チャットテンプレートはXML形式のツール呼び出しを生成し、対応するMLX-LMはそれをOpenAI互換の`tool_calls`へ変換します。Hermesのツール実行にはこの変換が必要ですが、PC操作の権限や確認ルールを変更するものではありません。モデル更新後は実際のツール呼び出しまで確認してください。
+
+### 最初の応答が遅い場合
+
+`tools/probe_ttft.py`で最初のトークンまでの時間とキャッシュ使用量を計測できます。
+Python標準ライブラリだけで動き、入力文や応答本文は出力に保存しません。
+`request.json`には通常の`/v1/chat/completions`リクエストを用意してください。
+
+```bash
+python3 tools/probe_ttft.py --input-json request.json --repeat 2
+```
+
+`first_token_ms`は推論・ツール呼び出しも含む最初の出力、`first_content_ms`は本文の開始です。
+`usage.prompt_tokens_details.cached_tokens`と入力tokensを比べると、入力の再処理を見分けられます。
+計測も実際に推論を実行するため、共有サーバーが空いているときに行ってください。
+
+Qwenのハイブリッドキャッシュでは、会話途中の状態を任意の位置へ巻き戻せません。
+共通入力の状態を別に保持することが、新規会話や裏側の振り返り後の速度に影響します。
+mlx-lm 0.31.3の容量整理はリクエスト投入時に行われ、処理中の増加まで常に制限するものではありません。
+4GBはプロセス全体のメモリ上限ではなく、長い会話や複数エージェントでの利用には別途実測が必要です。
 
 ---
 
