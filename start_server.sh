@@ -409,11 +409,17 @@ echo "   Allowed origins:       ${ALLOWED_ORIGINS}"
 echo "   Thinking:              ${THINKING_MODE}"
 echo "   Network model access:  disabled (local cache only)"
 
+# Optional private local entry; model arguments below remain unchanged.
+MLX_SERVER_COMMAND=(mlx_lm.server)
+if [ -x "${MLX_SERVER_DIR}/local_server_entry" ]; then
+  MLX_SERVER_COMMAND=("${MLX_SERVER_DIR}/local_server_entry")
+fi
+
 # サーバーだけをオフライン化する。Yunoやドギドの環境には波及しない。
 exec env \
   HF_HUB_OFFLINE=1 \
   TRANSFORMERS_OFFLINE=1 \
-  mlx_lm.server \
+  "${MLX_SERVER_COMMAND[@]}" \
     --model "${MODEL_ARGUMENT}" \
     --host "${HOST}" \
     --port "${PORT}" \
