@@ -201,6 +201,10 @@ models.conf
 # macOS
 .DS_Store
 
+# マシンごとの接続先・認証設定を持つローカル起動コマンド
+/local_server_entry
+/local_server_entry.studio-tmp
+
 # エディタ・IDE
 .vscode/
 .idea/

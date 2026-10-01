@@ -278,14 +278,13 @@ case "$MODEL_REF" in
   *Qwen3.8-27B*) MODEL_IS_QWEN38=1 ;;
 esac
 
-# 27B dense 8bitは品質を優先しつつ、64GB Unified MemoryにKV cacheと
-# Hermes本体の余裕を残す。明示した環境変数は常にこちらより優先する。
+# 27B denseモデルは同時生成を抑え、キャッシュ領域を確保する。
+# 明示した環境変数は常にこちらより優先する。
 if [ "$MODEL_IS_QWEN38" -eq 1 ]; then
   # 配布モデルのtext_config.max_position_embeddingsと一致させる。
   CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-262144}"
   DECODE_CONCURRENCY="${MLX_DECODE_CONCURRENCY:-1}"
-  # 共通prefix約1.7GBに加え、会話・振り返りの分岐と処理中cacheを保持する。
-  # 4GBでも分岐の増加と複数prefixの併存で共通入力が追い出された。
+  # 共通入力に加え、会話の分岐と処理中のキャッシュを保持する。
   PROMPT_CACHE_BYTES="${MLX_PROMPT_CACHE_BYTES:-8GB}"
 else
   CLIENT_CONTEXT_TARGET="${MLX_CLIENT_CONTEXT_TARGET:-65536}"
@@ -415,7 +414,7 @@ if [ -x "${MLX_SERVER_DIR}/local_server_entry" ]; then
   MLX_SERVER_COMMAND=("${MLX_SERVER_DIR}/local_server_entry")
 fi
 
-# サーバーだけをオフライン化する。Yunoやドギドの環境には波及しない。
+# このサーバープロセスだけをオフライン化する。
 exec env \
   HF_HUB_OFFLINE=1 \
   TRANSFORMERS_OFFLINE=1 \

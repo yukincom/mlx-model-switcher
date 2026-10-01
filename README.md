@@ -1,9 +1,11 @@
 # MLX Server 起動スクリプト（モデル切り替え対応版）
 
+[![CI](https://github.com/yukincom/mlx-model-switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/yukincom/mlx-model-switcher/actions/workflows/ci.yml)
+
 Apple Silicon（MLX）向け**ローカルLLMサーバー**を快適に運用するためのBash起動スクリプトです。
 
 矢印キーだけでモデルを選択できる対話型メニューと、`models.conf`によるエイリアス管理で、複数のモデルを切り替えられます。
-OpenAI互換APIとして、**Hermes Agent**などのローカルクライアントから利用できます。
+OpenAI互換APIとして、**Hermes Agent**など、外部LLMの接続先を設定できるアプリから利用できます。
 
 ![sample.png](https://github.com/yukincom/mlx-model-switcher/blob/main/sample.png)
 
@@ -74,9 +76,39 @@ custom_providers:
 
 **ポイント**
 - `models:` 配下のキーは **Hugging Face上のモデル名**（mlx-community/...）を使う
-- Qwen3.8-27B-8bitの`context_length: 262144`は配布モデルの`text_config.max_position_embeddings`に合わせる。Hermesの最低条件は64,000 tokensであり、モデル自体の上限とは異なる。全長での実行速度・メモリ使用量は実機検証が必要
+- `context_length`は配布モデルの仕様と利用環境に合わせて設定します
 - スクリプトも同じHugging Face IDをサーバーへ渡すため、最初のリクエストで同じモデルを再ロードしません
 - モデル取得はサーバープロセス内だけオフライン固定です。切り替え先は事前にダウンロードしてください
+
+---
+
+## 🤝 複数アプリから共有する
+
+1つのMLXサーバーを起動し、各アプリのLLM接続先を同じAPIへ向けることで、同じモデルをプロジェクトごとにロードする必要がなくなります。
+
+### 接続の手順
+
+1. このスクリプトで共有するモデルを一度起動します。
+2. 各アプリの外部LLM／共有サーバーモードを選び、Base URLを`http://127.0.0.1:8080/v1`に設定します。
+3. リクエストの`model`には、起動したモデルと同じHugging Face ID（ローカルモデルの場合は起動時のモデルパス）を指定します。`models.conf`の左辺のエイリアスは起動スクリプト専用です。
+4. 各アプリ側のモデル読み込みやLLMサーバー自動起動・終了を無効にします。共有サーバーは起動したターミナルで管理し、終了は`Ctrl+C`で行います。
+
+たとえば、上の設定例のモデルを起動した後は、次のリクエストで接続できます。
+
+```bash
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "mlx-community/Qwen3.8-27B-8bit",
+    "messages": [{"role": "user", "content": "こんにちは！"}],
+    "max_tokens": 128,
+    "stream": true
+  }'
+```
+
+接続設定名や外部サーバーの利用方法は、各アプリのドキュメントを参照してください。
+
+同時利用時の待ち時間は、各アプリとサーバーの同時実行設定に応じて確認してください。
 
 ---
 
@@ -106,48 +138,27 @@ MLX_THINKING=medium ./start_server.sh Qwen3.8-27B-8bit
 - クライアント側コンテキスト目標: 通常65536、Qwen3.8-27Bはモデル仕様に合わせた262144 tokens
 - 同時生成: 通常2、Qwen3.8-27Bは1。同時プロンプト読み込みは1
 - 長文の読み込み単位: 2048 tokens（mlx-lm 0.31.3の標準値）
-- プロンプトキャッシュ容量設定: 通常4GB、Qwen3.8-27Bは8GB。共通入力に加え、会話・振り返りの分岐と処理中のキャッシュを保持する
+- プロンプトキャッシュ容量設定: 通常4GB、Qwen3.8-27Bは8GB
 - 接続先: `127.0.0.1:8080`
 - Thinking: 無効（既定）。Qwen3.8は`MLX_THINKING=low|medium|xhigh`で切り替え可能
 
 一時的に変更する場合は、`MLX_PORT`、`MLX_MAX_TOKENS`、`MLX_DECODE_CONCURRENCY`、`MLX_PROMPT_CONCURRENCY`、`MLX_PREFILL_STEP_SIZE`、`MLX_PROMPT_CACHE_BYTES`、`MLX_THINKING`などの環境変数を利用できます。`MLX_MAX_TOKENS`はサーバーの既定値で、APIリクエストに対する強制上限ではありません。
 
-Qwen3.8の公式チャットテンプレートはXML形式のツール呼び出しを生成し、対応するMLX-LMはそれをOpenAI互換の`tool_calls`へ変換します。Hermesのツール実行にはこの変換が必要ですが、PC操作の権限や確認ルールを変更するものではありません。モデル更新後は実際のツール呼び出しまで確認してください。
-
-### 最初の応答が遅い場合
-
-`tools/probe_ttft.py`で最初のトークンまでの時間とキャッシュ使用量を計測できます。
-Python標準ライブラリだけで動き、入力文や応答本文は出力に保存しません。
-`request.json`には通常の`/v1/chat/completions`リクエストを用意してください。
-
-```bash
-python3 tools/probe_ttft.py --input-json request.json --repeat 2
-```
-
-`first_token_ms`は推論・ツール呼び出しも含む最初の出力、`first_content_ms`は本文の開始です。
-`usage.prompt_tokens_details.cached_tokens`と入力tokensを比べると、入力の再処理を見分けられます。
-計測も実際に推論を実行するため、共有サーバーが空いているときに行ってください。
-
-Qwenのハイブリッドキャッシュでは、会話途中の状態を任意の位置へ巻き戻せません。
-共通入力の状態を別に保持することが、新規会話や裏側の振り返り後の速度に影響します。
-mlx-lm 0.31.3の容量整理はリクエスト投入時に行われ、処理中の増加まで常に制限するものではありません。
-この設定はプロセス全体のメモリ上限ではなく、長い会話や複数エージェントでの利用には別途実測が必要です。
+初回応答の計測やキャッシュの確認方法は、[開発者向けガイド](CONTRIBUTING.md)を参照してください。
 
 ---
 
 ## 📌 注意事項
 
 - Apple Silicon + MLX専用
-- 大規模モデルはUnified Memoryを十分に確保してください
 - 標準ではlocalhost専用です。外部公開は`MLX_HOST`だけではできず、`MLX_ALLOW_REMOTE=1`も必要です
 - ブラウザからのCORSは同じlocalhostのサーバーoriginだけを標準で許可します。別ポートのUIを直結する場合は`MLX_ALLOWED_ORIGINS`へ追加してください
 - `models.conf`は起動用エイリアスであり、APIリクエストのモデル許可リストではありません。信頼できるローカルクライアント専用です
-- パソコン操作エージェントの安全境界はこのサーバーではなく、エージェント側の権限・確認・ツール制限で設けてください
-- `context_length`はMLXサーバーの起動引数ではなく、Hermesなど各クライアント側でも設定してください
-- 設定変更は次回のサーバー起動から反映されます
 
 ---
 
 ## 📄 License
 
 MIT License
+
+開発に参加する方は [開発者向けガイド](CONTRIBUTING.md) を参照してください。
