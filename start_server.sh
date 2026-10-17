@@ -48,8 +48,10 @@ usage() {
   ./start_server.sh list             登録モデル一覧を表示
   ./start_server.sh --help           この説明を表示
 
-Qwen3.8 Thinking設定:
-  MLX_THINKING=off     通常のHermesエージェント運用（既定）
+Thinking設定（対応モデルのみ）:
+  MLX_THINKING=off     推論を無効（既定）
+  MLX_THINKING=on      推論を有効
+Qwen3.8-27B専用の推論量設定:
   MLX_THINKING=low     短い推論
   MLX_THINKING=medium  コーディング向け推論
   MLX_THINKING=xhigh   深い推論
@@ -296,6 +298,9 @@ case "$THINKING_MODE" in
   off)
     CHAT_TEMPLATE_ARGS='{"enable_thinking":false,"preserve_thinking":false}'
     ;;
+  on)
+    CHAT_TEMPLATE_ARGS='{"enable_thinking":true,"preserve_thinking":false}'
+    ;;
   low|medium|xhigh)
     if [ "$MODEL_IS_QWEN38" -ne 1 ]; then
       echo "❌ MLX_THINKING=${THINKING_MODE} はQwen3.8-27B用です" >&2
@@ -304,7 +309,7 @@ case "$THINKING_MODE" in
     CHAT_TEMPLATE_ARGS="{\"enable_thinking\":true,\"reasoning_effort\":\"${THINKING_MODE}\",\"preserve_thinking\":false}"
     ;;
   *)
-    echo "❌ MLX_THINKING は off, low, medium, xhigh のいずれかを指定してください: ${THINKING_MODE}" >&2
+    echo "❌ MLX_THINKING は off, on, low, medium, xhigh のいずれかを指定してください: ${THINKING_MODE}" >&2
     exit 1
     ;;
 esac

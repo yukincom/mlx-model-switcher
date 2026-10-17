@@ -140,7 +140,7 @@ MLX_THINKING=medium ./start_server.sh Qwen3.8-27B-8bit
 - 長文の読み込み単位: 2048 tokens（mlx-lm 0.31.3の標準値）
 - プロンプトキャッシュ容量設定: 通常4GB、Qwen3.8-27Bは8GB
 - 接続先: `127.0.0.1:8080`
-- Thinking: 無効（既定）。Qwen3.8は`MLX_THINKING=low|medium|xhigh`で切り替え可能
+- Thinking: 無効（既定）。対応モデルは`MLX_THINKING=on|off`で切り替え可能。Qwen3.8は`MLX_THINKING=low|medium|xhigh`で切り替え可能
 
 一時的に変更する場合は、`MLX_PORT`、`MLX_MAX_TOKENS`、`MLX_DECODE_CONCURRENCY`、`MLX_PROMPT_CONCURRENCY`、`MLX_PREFILL_STEP_SIZE`、`MLX_PROMPT_CACHE_BYTES`、`MLX_THINKING`などの環境変数を利用できます。`MLX_MAX_TOKENS`はサーバーの既定値で、APIリクエストに対する強制上限ではありません。
 

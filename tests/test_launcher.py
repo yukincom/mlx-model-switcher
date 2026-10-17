@@ -122,6 +122,18 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(args["--host"], "127.0.0.1")
         self.assertEqual(args["--port"], "8080")
 
+    def test_thinking_on_and_off_reach_the_real_launcher_arguments(self):
+        self.install_fake_server()
+        for mode, enabled in (("on", True), ("off", False)):
+            with self.subTest(mode=mode):
+                args = self.assert_launched(self.run_launcher("sample", overrides={"MLX_THINKING": mode}))
+                self.assertEqual(json.loads(args["--chat-template-args"]),
+                                 {"enable_thinking": enabled, "preserve_thinking": False})
+
+    def test_unknown_thinking_setting_never_launches(self):
+        self.install_fake_server()
+        self.assert_rejected(self.run_launcher("sample", overrides={"MLX_THINKING": "invalid"}))
+
     def test_environment_overrides_reach_server(self):
         self.install_fake_server()
         args = self.assert_launched(self.run_launcher("sample", overrides={
