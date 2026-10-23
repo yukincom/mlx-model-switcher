@@ -419,6 +419,18 @@ if [ -x "${MLX_SERVER_DIR}/local_server_entry" ]; then
   MLX_SERVER_COMMAND=("${MLX_SERVER_DIR}/local_server_entry")
 fi
 
+# Emit the same startup record as the app; filesystem notifications update its UI.
+# Preserve this shell's PID across exec so exit notifications remain exact.
+if [ "$PORT" = "8080" ]; then
+  MANAGER_STATE_DIR="${MLX_MANAGER_STATE_ROOT:-$HOME/Library/Application Support/MLX Server Manager}"
+  mkdir -p "$MANAGER_STATE_DIR"
+  if [ "${MLX_MANAGER_LOGGED:-0}" != "1" ]; then
+    # Keep terminal output while notifying the app when loading reaches readiness.
+    exec > >(tee -a "$MANAGER_STATE_DIR/mlx-server.log") 2>&1
+  fi
+  python3 -I -B "$SCRIPT_DIR/tools/record_launch.py" "$$" "$ALIAS" "$THINKING_MODE"
+fi
+
 # このサーバープロセスだけをオフライン化する。
 exec env \
   HF_HUB_OFFLINE=1 \

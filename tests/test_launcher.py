@@ -28,6 +28,7 @@ class LauncherTests(unittest.TestCase):
             MLX_SERVER_DIR=str(self.root),
             HF_HUB_CACHE=str(self.cache),
             MLX_TEST_CAPTURE=str(self.capture),
+            MLX_MANAGER_STATE_ROOT=str(self.root / "manager-state"),
         )
         self.model = self.make_model(self.root / "models" / "sample model")
         self.config.write_text("sample=./models/sample model\n", encoding="utf-8")
@@ -121,6 +122,11 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(Path(args["--model"]).resolve(), self.model.resolve())
         self.assertEqual(args["--host"], "127.0.0.1")
         self.assertEqual(args["--port"], "8080")
+        record = json.loads((self.root / "manager-state/starting.json").read_text())
+        self.assertEqual(record["alias"], "sample")
+        self.assertIs(record["thinking"], False)
+        self.assertGreater(record["pid"], 0)
+        self.assertTrue(record["started"])
 
     def test_thinking_on_and_off_reach_the_real_launcher_arguments(self):
         self.install_fake_server()
@@ -143,6 +149,7 @@ class LauncherTests(unittest.TestCase):
             "MLX_ALLOWED_ORIGINS": "http://localhost:4321",
         }))
         self.assertEqual(args["--port"], "8181")
+        self.assertFalse((self.root / "manager-state/starting.json").exists())
         self.assertEqual(args["--max-tokens"], "1024")
         self.assertEqual(args["--decode-concurrency"], "3")
         self.assertEqual(args["--prompt-concurrency"], "2")

@@ -1,164 +1,54 @@
-# MLX Server 起動スクリプト（モデル切り替え対応版）
+# MLX Model Switcher — MLX 8080
 
 [![CI](https://github.com/yukincom/mlx-model-switcher/actions/workflows/ci.yml/badge.svg)](https://github.com/yukincom/mlx-model-switcher/actions/workflows/ci.yml)
 
-Apple Silicon（MLX）向け**ローカルLLMサーバー**を快適に運用するためのBash起動スクリプトです。
+Apple Silicon上のローカルLLMを、macOSアプリまたはターミナルから起動・停止するためのツールです。保存済みモデルの登録、表示名、デフォルトモデル、Thinkingの設定と、使用中モデルを保護した削除を扱います。推論APIは `http://127.0.0.1:8080/v1` です。
 
-矢印キーだけでモデルを選択できる対話型メニューと、`models.conf`によるエイリアス管理で、複数のモデルを切り替えられます。
-OpenAI互換APIとして、**Hermes Agent**など、外部LLMの接続先を設定できるアプリから利用できます。
+![MLX 8080の管理画面。停止中のモデル選択とThinking設定](sample.png)
 
-![sample.png](https://github.com/yukincom/mlx-model-switcher/blob/main/sample.png)
+## 構成
 
----
+- **MLX 8080.app**: AppKit / WKWebViewの画面とSwift製管理サーバー（`127.0.0.1:8766`）。モデル操作時だけPython workerを実行します。
+- **start_server.sh**: MLX-LMの起動、キャッシュ解決、オフライン設定を担う共通ランチャー。アプリとCLIのどちらも同じ起動経路を使います。
+- **推論プロセス**: 管理アプリから独立して動作します。ウィンドウを閉じる、またはアプリを終了しても推論は継続します。
 
-## ✨ 主な特徴
+管理画面の定期ポーリングはありません。管理API操作、起動記録・ログのファイル変更、対象PIDの終了を通知して表示を更新します。エージェントが管理APIや起動スクリプトを使った場合も自動反映します。画面の再表示時には現在の状態を取得します。
 
-- **矢印キー選択メニュー**（↑↓ + Enterのみ）
-- `models.conf` でエイリアス管理
-- エイリアスを引数にした非対話起動と一覧表示
-- Hugging Face IDと`refs/main`による確実なローカルキャッシュ解決
-- 長文向けの小分け読み込み、キャッシュ上限、控えめな同時実行数
-- localhostを標準にし、CORSを制限。Hugging Faceからの自動取得と`--trust-remote-code`を無効化
-- Hermes Agent対応（ダウンロード済みモデルのみ切り替え可能）
-- 設定ファイルにコメントで整理しやすい
+標準の推論バックエンドはMLX-LMです。スクリーンショットのGGUFは[外部llama.cppランチャーとの連携](docs/gguf-integration.md)によるもので、このリポジトリにllama.cppやモデル重みは含みません。旧Python製HTTPサーバーへのフォールバックはありません。
 
----
+## セットアップ
 
-## 📁 インストール
+macOS 14以降、Apple Silicon、Python 3.11以降、Xcode Command Line Toolsが必要です。アプリは使用するPython環境とランチャーの絶対パスをビルド時に記録するため、その配置を変更した場合は再ビルドしてください。
 
 ```bash
-git clone https://github.com/yukincom/mlx-model-switcher.git mlx-server
-cd mlx-server
-
-python -m venv .venv
-source .venv/bin/activate
-pip install mlx-lm
+git clone https://github.com/yukincom/mlx-model-switcher.git ~/mlx-server
+cd ~/mlx-server
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip certifi
+.venv/bin/python -m pip install 'mlx-lm==0.31.3'
+.venv/bin/python tools/build_apps.py
+open 'dist/MLX 8080.app'
 ```
 
----
+モデルは事前にダウンロードしてください。アプリの「モデル一覧」からHugging Faceキャッシュ内のモデルを登録できます。`models.conf`を編集する場合は、1行を `alias=Hugging Face ID` または `alias=/absolute/path/to/model` とします。相対パスは `./models/example` のように指定します。起動時に不足ファイルを自動ダウンロードしたり、remote codeを有効化したりはしません。
 
-## 📋 1. models.conf の設定
+## 操作と接続
 
-`models.conf`（例）：
+アプリではモデルとThinking ON/OFFを選んで起動します。別のモデルへ切り替える場合は、稼働中のモデルを停止してから起動します。表示名・デフォルト設定・起動一覧からの解除・本体削除は「モデル一覧」から操作します。本体削除では確認画面の後に、プロセスの同一性、使用中ファイル、共有モデル、確認時からの変更を再検査します。
 
-```properties
-# ==============================================
-# MLX モデル定義ファイル
-# ==============================================
-
-# --- メイン運用モデル（推奨） ---
-Qwen3.8-27B-8bit=mlx-community/Qwen3.8-27B-8bit
-
-# ローカルパスも利用可能
-my-model=/absolute/path/to/model
-
-```
-
-相対パスは`./models/my-model`のように`./`を付けると、Hugging Face IDと明確に区別できます。
-
----
-
-## 🔧 2. Hermes Agent 設定例
-
-`custom_providers` に以下のように追加してください：
-
-```yaml
-custom_providers:
-  - name: local-llm
-    base_url: http://localhost:8080/v1
-    model: mlx-community/Qwen3.8-27B-8bit   # デフォルトモデル
-    api_mode: chat_completions
-    models:
-      mlx-community/Qwen3.8-27B-8bit:
-        context_length: 262144
-        max_tokens: 8192
-```
-
-**ポイント**
-- `models:` 配下のキーは **Hugging Face上のモデル名**（mlx-community/...）を使う
-- `context_length`は配布モデルの仕様と利用環境に合わせて設定します
-- スクリプトも同じHugging Face IDをサーバーへ渡すため、最初のリクエストで同じモデルを再ロードしません
-- モデル取得はサーバープロセス内だけオフライン固定です。切り替え先は事前にダウンロードしてください
-
----
-
-## 🤝 複数アプリから共有する
-
-1つのMLXサーバーを起動し、各アプリのLLM接続先を同じAPIへ向けることで、同じモデルをプロジェクトごとにロードする必要がなくなります。
-
-### 接続の手順
-
-1. このスクリプトで共有するモデルを一度起動します。
-2. 各アプリの外部LLM／共有サーバーモードを選び、Base URLを`http://127.0.0.1:8080/v1`に設定します。
-3. リクエストの`model`には、起動したモデルと同じHugging Face ID（ローカルモデルの場合は起動時のモデルパス）を指定します。`models.conf`の左辺のエイリアスは起動スクリプト専用です。
-4. 各アプリ側のモデル読み込みやLLMサーバー自動起動・終了を無効にします。共有サーバーは起動したターミナルで管理し、終了は`Ctrl+C`で行います。
-
-たとえば、上の設定例のモデルを起動した後は、次のリクエストで接続できます。
+CLIでは次のように操作します。終了は起動したターミナルで `Ctrl+C` です。
 
 ```bash
-curl http://127.0.0.1:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "mlx-community/Qwen3.8-27B-8bit",
-    "messages": [{"role": "user", "content": "こんにちは！"}],
-    "max_tokens": 128,
-    "stream": true
-  }'
-```
-
-接続設定名や外部サーバーの利用方法は、各アプリのドキュメントを参照してください。
-
-同時利用時の待ち時間は、各アプリとサーバーの同時実行設定に応じて確認してください。
-
----
-
-## 🚀 使い方
-
-```bash
-# 対話メニューから起動
-./start_server.sh
-
-# 直接指定して起動
-./start_server.sh Qwen3.8-27B-8bit
-
-# コーディングや難しい判断でThinkingを使う
-MLX_THINKING=medium ./start_server.sh Qwen3.8-27B-8bit
-
-# 一覧表示
 ./start_server.sh list
+./start_server.sh <alias>
+MLX_THINKING=on ./start_server.sh <alias>
+./start_server.sh                 # 矢印キーでモデルを選択
 ```
 
----
+外部クライアントのBase URLを `http://127.0.0.1:8080/v1` に設定し、`GET /v1/models`が返すモデルIDを使用します。`models.conf`左辺のaliasはランチャーの識別子です。複数クライアントで同じ推論サーバーを共有できますが、同時実行数・コンテキスト長・メモリ使用量はバックエンドとモデル設定に依存します。
 
-## ⚙️ スクリプト内設定
+エージェントによる操作は[管理API](docs/management-api.md)を参照してください。起動設定、テスト、CI、初回応答の計測は[開発者向けガイド](CONTRIBUTING.md)に記載しています。
 
-現在の標準値：
-
-- リクエストで省略した場合の出力値: 8192 tokens
-- クライアント側コンテキスト目標: 通常65536、Qwen3.8-27Bはモデル仕様に合わせた262144 tokens
-- 同時生成: 通常2、Qwen3.8-27Bは1。同時プロンプト読み込みは1
-- 長文の読み込み単位: 2048 tokens（mlx-lm 0.31.3の標準値）
-- プロンプトキャッシュ容量設定: 通常4GB、Qwen3.8-27Bは8GB
-- 接続先: `127.0.0.1:8080`
-- Thinking: 無効（既定）。対応モデルは`MLX_THINKING=on|off`で切り替え可能。Qwen3.8は`MLX_THINKING=low|medium|xhigh`で切り替え可能
-
-一時的に変更する場合は、`MLX_PORT`、`MLX_MAX_TOKENS`、`MLX_DECODE_CONCURRENCY`、`MLX_PROMPT_CONCURRENCY`、`MLX_PREFILL_STEP_SIZE`、`MLX_PROMPT_CACHE_BYTES`、`MLX_THINKING`などの環境変数を利用できます。`MLX_MAX_TOKENS`はサーバーの既定値で、APIリクエストに対する強制上限ではありません。
-
-初回応答の計測やキャッシュの確認方法は、[開発者向けガイド](CONTRIBUTING.md)を参照してください。
-
----
-
-## 📌 注意事項
-
-- Apple Silicon + MLX専用
-- 標準ではlocalhost専用です。外部公開は`MLX_HOST`だけではできず、`MLX_ALLOW_REMOTE=1`も必要です
-- ブラウザからのCORSは同じlocalhostのサーバーoriginだけを標準で許可します。別ポートのUIを直結する場合は`MLX_ALLOWED_ORIGINS`へ追加してください
-- `models.conf`は起動用エイリアスであり、APIリクエストのモデル許可リストではありません。信頼できるローカルクライアント専用です
-
----
-
-## 📄 License
+## License
 
 MIT License
-
-開発に参加する方は [開発者向けガイド](CONTRIBUTING.md) を参照してください。
