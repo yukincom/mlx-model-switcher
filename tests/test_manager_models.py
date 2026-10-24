@@ -59,6 +59,56 @@ class ModelManagerTests(unittest.TestCase):
             {'directory': 'gemma', 'file': 'gemma.gguf', 'bytes': path.stat().st_size}]}))
         return path
 
+    def external_gguf_cache(self, root):
+        cache = self.root / 'cache' / root.name / 'models'
+        cache.parent.mkdir(parents=True)
+        (root / 'models').rename(cache)
+        with (root / 'server.py').open('a') as stream:
+            stream.write('\nfrom pathlib import Path\nMODELS_ROOT = Path(' + repr(str(cache)) + ')\n')
+        return cache
+
+    def test_external_gguf_cache_lists_size_and_previews_actual_location(self):
+        root = self.gguf()
+        self.add_gemma(root)
+        cache = self.external_gguf_cache(root)
+        self.assertEqual(models.gguf_models_root(), cache)
+        self.assertEqual(models.find_model(TEST_GGUF_ALIAS)['size_bytes'], 21)
+        preview = models.deletion_preview(TEST_GGUF_ALIAS, True)
+        self.assertEqual(preview['location'], str(cache))
+        self.assertEqual(preview['file_count'], 3)
+        self.assertEqual(preview['bytes'], 21)
+        self.assertTrue(all(path.is_relative_to(cache) for path in models.gguf_files(TEST_GGUF_ALIAS)))
+        self.assertFalse((root / 'models').exists())
+
+    def test_external_gguf_cache_deletion_preserves_other_profile_and_unlisted_file(self):
+        for selected, kept in [('gguf:gemma-test', TEST_GGUF_ALIAS), (TEST_GGUF_ALIAS, 'gguf:gemma-test')]:
+            with self.subTest(selected=selected), patch.object(models, 'GGUF_ROOT', self.root / selected.replace(':', '-')):
+                root = self.gguf()
+                self.add_gemma(root)
+                cache = self.external_gguf_cache(root)
+                unrelated = cache / 'unlisted.gguf'
+                unrelated.write_bytes(b'keep')
+                expected = models.gguf_files(kept)
+                preview = models.deletion_preview(selected, True)
+                models.delete_model(selected, True, preview['fingerprint'])
+                self.assertTrue(all(path.is_file() for path in expected))
+                self.assertEqual(unrelated.read_bytes(), b'keep')
+                self.assertEqual(models.gguf_files(selected), [])
+
+    def test_external_gguf_cache_rejects_symlinked_root(self):
+        root = self.gguf()
+        cache = self.external_gguf_cache(root)
+        real_cache = cache.with_name('real-models')
+        cache.rename(real_cache)
+        cache.symlink_to(real_cache, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'リンク先'):
+            models.deletion_preview(TEST_GGUF_ALIAS, True)
+
+    def test_external_gguf_cache_rejects_relative_root(self):
+        with patch.object(models, 'gguf_runtime', return_value=SimpleNamespace(MODELS_ROOT='relative/models')):
+            with self.assertRaisesRegex(ValueError, '保存先'):
+                models.gguf_models_root()
+
     def test_gemma_uses_its_own_profile_name_size_and_start_target(self):
         root = self.gguf()
         path = self.add_gemma(root)

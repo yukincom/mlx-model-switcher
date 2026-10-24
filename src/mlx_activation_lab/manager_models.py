@@ -78,12 +78,21 @@ def gguf_profile(alias):
     return profile
 
 
+def gguf_models_root():
+    """Read the launcher's explicit weight directory, retaining the legacy layout."""
+    runtime = gguf_runtime()
+    root = Path(getattr(runtime, "MODELS_ROOT", GGUF_ROOT / "models")).expanduser()
+    if not root.is_absolute() or ".." in root.parts:
+        raise ValueError("GGUFの保存先を確認できません")
+    return root
+
+
 def gguf_files(alias):
     # 選んだモデルのmanifestだけを読む。別モデルの本体やMTPを削除対象に混ぜない。
     manifest = GGUF_ROOT / gguf_profile(alias)["manifest"]
     if not manifest.is_file():
         return []
-    root = GGUF_ROOT / "models"
+    root = gguf_models_root()
     files = []
     for item in json.loads(manifest.read_text())["files"]:
         path = root / item["directory"] / item["file"]
@@ -338,7 +347,7 @@ def deletion_preview(alias, body=False):
     if body:
         if item["format"] == "GGUF":
             files = [_file_info(path) for path in gguf_files(alias)]
-            location = str(GGUF_ROOT / "models")
+            location = str(gguf_models_root())
         else:
             repo = next((repo for repo in _cache_repos() if repo.repo_id == item["model"]), None)
             if repo is None:

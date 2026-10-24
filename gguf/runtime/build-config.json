@@ -1,0 +1,266 @@
+{
+  "upstream_repository": "https://github.com/ggml-org/llama.cpp.git",
+  "base_commit": "781dbc5ac98921dbdb5e5b2ec5b7a50960e937d4",
+  "adopted_runtime_commit": "6190802c8d3391ee908fb254d12fc243ad4540c6",
+  "preserved_source_head": "93cf9d707cb35bf7e6d63e29a352cf3fb4e96771",
+  "source_bundle": "source-patches.bundle",
+  "source_bundle_sha256": "987b8935b2d3b29048c65b2fff0060e3a3292829ad40f6f1ba76b112dea289b3",
+  "bundled_commits_after_base": 56,
+  "adopted_patch_count": 55,
+  "original_build_recorded_local": "2026-10-14 20:58:10 +0900",
+  "build_commands": [
+    [
+      "cmake",
+      "-S",
+      "llama.cpp",
+      "-B",
+      "llama.cpp/build-14a",
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DGGML_METAL=ON",
+      "-DGGML_METAL_EMBED_LIBRARY=ON",
+      "-DLLAMA_CURL=OFF"
+    ],
+    [
+      "cmake",
+      "--build",
+      "llama.cpp/build-14a",
+      "--target",
+      "llama-server",
+      "llama-bench",
+      "llama-perplexity",
+      "llama-simple",
+      "-j",
+      "12"
+    ]
+  ],
+  "build_version_output": "0.6.0-dev (build 56, commit 6190802); AppleClang 21.0.0.21000334; Darwin arm64",
+  "note": "The deployed binary was retained from build-14a. The additional source commit 93cf9d7 is preserved but was not built into the adopted binary. No recompilation was performed during migration.",
+  "original_binary_sha256": {
+    "llama-perplexity": "b58530d988f136e6dee2308b89b909d67882889b7711ef9e4bfc8a0dba1501f0",
+    "llama-bench": "7ad52f910948c5626823ae8e25e9675b4a36fc204b39555e779e0a99f0caa4d9",
+    "llama-server": "a98963e08d08ab3f247d3ed8268cbf45a767917ff9c76a0a137f85cecdfce7e0",
+    "llama-simple": "4f01df8286d4dd7f2364ab1b6aacdff77fff27a35b9309f28881544d327f6b7b"
+  },
+  "upstream_patches": [
+    {
+      "file": "0001-metal-GGML_METAL_TIMING-per-graph-GPU-timing.patch",
+      "sha256": "175723d4b872db40effc10ab3ccb7b10cf00f7d4ce587209f119678c12684d78"
+    },
+    {
+      "file": "0002-metal-fold-hc-post-sigmoid-gate-into-DSV4_HC_POST-G3.patch",
+      "sha256": "bfd631d25f552d4e2ad6b1c678bf2b7a1997c5d0c7430e0abd3454b6d69e77ad"
+    },
+    {
+      "file": "0003-metal-profiling-switches-GGML_METAL_PROF_SKIP-GGML_M.patch",
+      "sha256": "b2059a3a963e3f9989f63fc1680cb8c4894ac07bb3b95d636ee10a8dbcd6b21d"
+    },
+    {
+      "file": "0004-qwen4exp-metal-hc-mix-as-one-persistent-dispatch-wit.patch",
+      "sha256": "bc076a27f9027f3310f0ef3b784b2738c571bedbb99e9915147be4645136bc26"
+    },
+    {
+      "file": "0005-metal-hc-mix-v2-split-K-phase-1-per-tg-act.patch",
+      "sha256": "cf407e3c676608f579d4d0dd6874d707a84224ff8b2fdafc1df118951adf838c"
+    },
+    {
+      "file": "0006-metal-hc-mix-v3-16-byte-loads-shared-x-w_norm.patch",
+      "sha256": "d71ed208a623186b0cce71e5e82d9d14484efa18802ce5aef003767672133991"
+    },
+    {
+      "file": "0007-metal-poll-command-buffer-status-instead-of-blocking.patch",
+      "sha256": "c4d31d9141dbbf05a6b004d709b03ed05b0715101d6157b990ae7c6180946d7d"
+    },
+    {
+      "file": "0008-metal-hc-mix-v4-prefetch-phase-2-weights-before-grid.patch",
+      "sha256": "55ff62f91bbf587670a7222eebab9fd9d4e0423dc04f9b0d4daa92502e3d7aff"
+    },
+    {
+      "file": "0009-metal-hc-mix-v5-profiling-bits.patch",
+      "sha256": "0d9d4361d8f620354a0aba2dce84459e27d70535d4caaec14f72bb36e61830c4"
+    },
+    {
+      "file": "0010-metal-hc-mix-opt-in-GGML_METAL_HC_MIX-1-until-it-bea.patch",
+      "sha256": "bcd93a46053bda01135cb8d351e4999888a98f1b48b6aeb2ac7e50078fbd179e"
+    },
+    {
+      "file": "0011-metal-GGML_METAL_PROF_IDS-expert-reuse-profiling.patch",
+      "sha256": "d73dc38d18e040c56e791ac95a960dd64bfc6899dce5d1320b8b56b352eba68d"
+    },
+    {
+      "file": "0012-metal-MoE-expert-dedup-for-multi-token-mul_mv_id-bal.patch",
+      "sha256": "6f0b9647b690d36af32b2cbef435aa0b557a8ee7c3be21ff2fcea106a5b99bf1"
+    },
+    {
+      "file": "0013-metal-GGML_METAL_PROF_DEPTH-data-flow-depth-report.patch",
+      "sha256": "e053355014f15e627477594696b9bb38acaa7834f72b32c1bd1d600f3b33324e"
+    },
+    {
+      "file": "0014-metal-GGML_METAL_PROF_NOTABLES-profiling-macro.patch",
+      "sha256": "8ab45a47d653c55f0bb03961943bbe211fffde1515388e114a774b38adba0f23"
+    },
+    {
+      "file": "0015-metal-fix-mv_id-pair-mask-for-64-pairs-without-dedup.patch",
+      "sha256": "637d4b7c188dde4513139f579c2b29dc1e051581356783a64b8f0b5cea2f2714"
+    },
+    {
+      "file": "0016-metal-SSM_CONV-for-few-tokens-one-thread-per-channel.patch",
+      "sha256": "8e6fc31ed714c036e9927e157c1898baac4fbbac093b6f93be9c3d270e498cdb"
+    },
+    {
+      "file": "0017-metal-GGML_METAL_PROF_DISPATCH-dispatch-shape-profil.patch",
+      "sha256": "bea0ddfca6c6a81a9746ef00a2ada50616163eec4102db8f93691608e374eae8"
+    },
+    {
+      "file": "0018-metal-contiguous-unary-binary-kernels-use-256-thread.patch",
+      "sha256": "e87b64870dc6ee10e6281f14bcc738e38443dc79da1ea52f908e3698db5423f3"
+    },
+    {
+      "file": "0019-metal-grouped-MoE-matvec-opt-in-slower-than-stock-di.patch",
+      "sha256": "7f6a3a2742a45f8bfe406dcfdd4893253ff0e488354f11daf9688ee3d1b47379"
+    },
+    {
+      "file": "0020-metal-kernel_moe_mt_iq4_nl-few-token-MoE-opt-in-expe.patch",
+      "sha256": "ceaed3fc8ad380f890f4afd27d9bc65b238b17b5f8c515b61e8481d5bb34a2a3"
+    },
+    {
+      "file": "0021-qwen4exp-MTP-draft-only-coarse-Q2_K-LM-head-top-32-s.patch",
+      "sha256": "bcf583d0035c3f9fbbc544c421f724c1f6805f54cba55815003b25625e97705b"
+    },
+    {
+      "file": "0022-coarse-head-accept-any-ggml-type-name.patch",
+      "sha256": "7e584d63c87aa7f576c064ff43e004c864e81546cf6dd5735dad17531fa8f10b"
+    },
+    {
+      "file": "0023-speculative-EV-planned-MTP-depth-LLAMA_SPEC_EV-1-opt.patch",
+      "sha256": "c9a9dee860f7016e5646c9ecf95a01d35c2b17dadbeb084d7d78613c2cce137c"
+    },
+    {
+      "file": "0024-speculative-MTP-agreement-gated-context-lookup-LLAMA.patch",
+      "sha256": "4eb98fe624f9bdcb0e69f4af19c491072921eeeafa8e19b07e17ff603a68a87c"
+    },
+    {
+      "file": "0025-recurrent-rollback-copy-conv-state-snapshots-only-fo.patch",
+      "sha256": "856a125bd2d38ce2377fda6afa87b81e17aeb168448c21abb61dc885c0378b69"
+    },
+    {
+      "file": "0026-speculative-context-lookup-v2-LLAMA_SPEC_LOOKUP-2-op.patch",
+      "sha256": "c3b883b6275d52df674a3c30d5585ec53468f0d66d9bf412e9575a086f441556"
+    },
+    {
+      "file": "0027-speculative-adaptive-MTP-depth-controller-LLAMA_SPEC.patch",
+      "sha256": "5e6801832a55930ea8b99251e0ab3cb335f09855ac3f65091bc84c6f4a6de27f"
+    },
+    {
+      "file": "0028-depth-ctl-reject-round-time-outliers.patch",
+      "sha256": "22e379770043eda82f1cdd5a8c30a42085fcbbe90db9737b86284f64e209b043"
+    },
+    {
+      "file": "0029-speculative-bandit-depth-controller-LLAMA_SPEC_DEPTH.patch",
+      "sha256": "7f935726e8e0f5d4aa5ab886e427193d689dc66ee1ff350258e4c9ef835e4212"
+    },
+    {
+      "file": "0030-metal-GGML_METAL_MM_ID_MIN-diagnostic-threshold.patch",
+      "sha256": "f7b696a7e90b1fe8fa61c7c6daa51710d2ad454bb1ed4ca2c57b83e4b8c1afb6"
+    },
+    {
+      "file": "0031-depth-ctl-acceptance-gated-probes-minimum-depth-LLAM.patch",
+      "sha256": "aaf3253262d30eab1a6c3e154a084bf2b96b2ef3c9020e8de87573501104080a"
+    },
+    {
+      "file": "0032-metal-few-token-q2_0-MoE-kernel-decoding-with-the-ha.patch",
+      "sha256": "23c6e9f96fa0130491520877aa22676d7f042843b2da8f3754221b8a07ac1fa7"
+    },
+    {
+      "file": "0033-metal-profiling-helpers-GGML_METAL_PROF_SKIPNAME-by-.patch",
+      "sha256": "04b15d88a684f330c5f72190fd128c89effb6f7b2a4b2d2744567c4bc1c7ba1e"
+    },
+    {
+      "file": "0034-spec-graph-graph-cache-per-small-batch-shape-LLAMA_G.patch",
+      "sha256": "29fc6f67ba5af6e70012f573964aad80a48863dfda85755f66b242d5af15c795"
+    },
+    {
+      "file": "0035-spec-MTP-pair-dump-LLAMA_SPEC_MTP_DUMP-and-recursion.patch",
+      "sha256": "8c891785dddbf4b34717743861c83bf86433a873be6e0b89ce932d1fa04ff56d"
+    },
+    {
+      "file": "0036-metal-opt-in-iq3_s-matvec-with-signed-code-half2-dec.patch",
+      "sha256": "38ec38f58c513b7b48869391984492a14b30690aa323e18b972199632814ced9"
+    },
+    {
+      "file": "0037-metal-q4_K-few-row-MMA-with-a-q4_K-specific-decode-t.patch",
+      "sha256": "4e37369e18405f4f05f81ae0407f76e04ffc1cc7871efd28f6c3f6c7fc1a2f0f"
+    },
+    {
+      "file": "0038-profiling-GGML_SCHED_TIME-host-time-of-CPU-splits-an.patch",
+      "sha256": "48e6f51fa28e3f7c75d58b6f99930bd07136263eca48d50f09a25691412d0dce"
+    },
+    {
+      "file": "0039-profiling-GGML_METAL_PROF_NOBAR_OPS-drop-barriers-pe.patch",
+      "sha256": "750a17c69b76aa838fc79431624060902cd9cb02ec061a4463b038f8f68ce6ee"
+    },
+    {
+      "file": "0040-Revert-metal-q4_K-few-row-MMA-with-a-q4_K-specific-d.patch",
+      "sha256": "93e9be44b2993445596b0182fd2c463fd9a64ef97a3025a8b56136d5d5d5e7ad"
+    },
+    {
+      "file": "0041-metal-fewer-stages-on-the-verify-pass-outputs-bit-id.patch",
+      "sha256": "67bd93d341c7d1e7b26c0a61ee0819118ab9cde98c1f04b92ffb02c93328b2de"
+    },
+    {
+      "file": "0042-metal-HC_POST-gated-grouped-RMS_NORM-gamma-in-one-di.patch",
+      "sha256": "1f0d201faaefb55cacfb3ab279fc30b8ec115ee407f91ca8ecdaecfd941b60bf"
+    },
+    {
+      "file": "0043-metal-HC-mix-tail-in-one-dispatch-SCALE-SILU-on-the-.patch",
+      "sha256": "eda099c261a8bb6242eacf5e91017159173e780c8f7f881b4c1496d3a96bf841"
+    },
+    {
+      "file": "0044-qwen4exp-metal-GDN-decay-gate-ADD-SOFTPLUS-MUL-in-on.patch",
+      "sha256": "d9f862d99f37ff2509cb71ca3dd1637d3c1d9aebb26f625e316a3283779b82be"
+    },
+    {
+      "file": "0045-qwen4exp-QSA-with-every-pool-selected-n_pool-top_k-k.patch",
+      "sha256": "aeb0a96c6e4b86afa9c1d18bb4c901b64aed5e07536174a9643fb42c403138cc"
+    },
+    {
+      "file": "0046-speculative-depth-controller-round-time-fixes-first-.patch",
+      "sha256": "feaaa7954818f09a4369230ce91985b668826ec26f2bc96c09fad3c3b148c023"
+    },
+    {
+      "file": "0047-llama-model-opt-in-LLAMA_GPU_OWN_WEIGHTS-copies-GPU-.patch",
+      "sha256": "ebeb6f05c9ab139806ee36ff4c2531ffeed54c733e0a4f5508f37609c3708cf3"
+    },
+    {
+      "file": "0048-speculative-per-draft-stop-rule-from-the-MTP-head-co.patch",
+      "sha256": "d8cef3479e07d9ab24987237c1e464e86f22b4e3f531cbd663a52ef048591b8e"
+    },
+    {
+      "file": "0049-stop-rule-lambda-as-a-slow-EMA-0.01-round-init-0.09-.patch",
+      "sha256": "089f453fbc18e5a2db886c304f329d557c94acda84fef259242261a429dc9d51"
+    },
+    {
+      "file": "0050-llama-context-portable-host-mark-clock-CLOCK_MONOTON.patch",
+      "sha256": "bf4d5305356392104611cb159acd451d2e458f80a39c32e35f213b2238a2bdfd"
+    },
+    {
+      "file": "0051-spec-MTP-merge-defer-only-the-verify-batch-of-the-la.patch",
+      "sha256": "20668ddcd00cfd15caa39ef00e468e0e783053985d2653cbe8812fd7e302b6ed"
+    },
+    {
+      "file": "0052-llama_prefetch-on-macOS-fault-the-pages-of-the-reque.patch",
+      "sha256": "5b84632caf09047f26b5172b08adadd09ed26ecd56faca78e384a07f58c16b52"
+    },
+    {
+      "file": "0053-stop-rule-per-model-parameters-from-LLAMA_SPEC_STOP_.patch",
+      "sha256": "424c4479330c1b6bbfcce10546b50d3f8b8ddde76befdfe459e355069597e415"
+    },
+    {
+      "file": "0054-metal-mul_mv_id-Q5_K-rows-of-2-super-blocks-the-idle.patch",
+      "sha256": "fa74b2b56df95846e0f819efb23a33570e030e52c9b71844f47cd530ce0c6479"
+    },
+    {
+      "file": "0055-qwen35moe-MTP-draft-only-coarse-LM-head-LLAMA_MTP_CO.patch",
+      "sha256": "e456130b435b9ade1feeb594f246eb7e96c91c6d38ccdd623bc271161d86ceb8"
+    }
+  ]
+}
