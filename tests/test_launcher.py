@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -13,6 +14,25 @@ SCRIPT = Path(__file__).resolve().parents[1] / "start_server.sh"
 
 
 class LauncherTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.native = None
+        if sys.platform == "darwin":
+            cls.native_folder = tempfile.TemporaryDirectory(prefix="mlx-launch-record-")
+            cls.native = Path(cls.native_folder.name) / "MLXServerManager"
+            root = SCRIPT.parent
+            subprocess.run(["/usr/bin/swiftc", "-swift-version", "5", "-module-cache-path",
+                            str(Path(cls.native_folder.name) / "cache"),
+                            "-framework", "Network", "-framework", "Security",
+                            *(str(root / "native" / name) for name in
+                              ("ServerManager.swift", "ManagerRuntime.swift", "ManagerModelStore.swift")),
+                            "-o", str(cls.native)], check=True, capture_output=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.native is not None:
+            cls.native_folder.cleanup()
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="mlx launcher ")
         self.addCleanup(temporary.cleanup)
@@ -30,6 +50,14 @@ class LauncherTests(unittest.TestCase):
             MLX_TEST_CAPTURE=str(self.capture),
             MLX_MANAGER_STATE_ROOT=str(self.root / "manager-state"),
         )
+        if self.native is not None:
+            self.env["MLX_MANAGER_EXECUTABLE"] = str(self.native)
+        else:
+            # Linux tests only the Bash invocation contract; Swift runs on macOS CI.
+            helper = self.root / "record-fixture"
+            helper.write_text("#!/bin/sh\nexit 0\n")
+            helper.chmod(0o755)
+            self.env["MLX_MANAGER_EXECUTABLE"] = str(helper)
         self.model = self.make_model(self.root / "models" / "sample model")
         self.config.write_text("sample=./models/sample model\n", encoding="utf-8")
 
@@ -122,11 +150,17 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(Path(args["--model"]).resolve(), self.model.resolve())
         self.assertEqual(args["--host"], "127.0.0.1")
         self.assertEqual(args["--port"], "8080")
-        record = json.loads((self.root / "manager-state/starting.json").read_text())
-        self.assertEqual(record["alias"], "sample")
-        self.assertIs(record["thinking"], False)
-        self.assertGreater(record["pid"], 0)
-        self.assertTrue(record["started"])
+        if self.native is not None:
+            record = json.loads((self.root / "manager-state/starting.json").read_text())
+            self.assertEqual(record["alias"], "sample")
+            self.assertIs(record["thinking"], False)
+            self.assertGreater(record["pid"], 0)
+            self.assertTrue(record["started"])
+
+    def test_missing_native_helper_does_not_start_inference(self):
+        self.install_fake_server()
+        self.assert_rejected(self.run_launcher("sample", overrides={
+            "MLX_MANAGER_EXECUTABLE": str(self.root / "missing-helper")}))
 
     def test_thinking_on_and_off_reach_the_real_launcher_arguments(self):
         self.install_fake_server()

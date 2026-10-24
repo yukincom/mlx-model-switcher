@@ -1,0 +1,27 @@
+{
+  "models_root": "~/.cache/gguf/models",
+  "binary": "runtime/bin/llama-server",
+  "profiles": [
+    {
+      "target": "example",
+      "alias": "gguf:example",
+      "model": "example-Q4_K_M",
+      "name": "Example GGUF",
+      "manifest": "model-manifest.json",
+      "required_verifications": [
+        "evidence/model-verified.json"
+      ],
+      "model_file": "example-Q4_K_M.gguf",
+      "arguments": [
+        "-ngl",
+        "99",
+        "-c",
+        "8192",
+        "-np",
+        "1"
+      ],
+      "environment": {},
+      "unset_environment": []
+    }
+  ]
+}

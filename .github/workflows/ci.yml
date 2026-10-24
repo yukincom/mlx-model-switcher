@@ -33,8 +33,6 @@ jobs:
       - uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
-      - name: Install test dependencies
-        run: python -m pip install 'huggingface-hub==1.12.0'
       - name: Check launcher and frontend syntax
         run: |
           /bin/bash -n start_server.sh
@@ -47,6 +45,6 @@ jobs:
       - name: Build and verify the macOS application
         if: runner.os == 'macOS'
         run: |
-          python tools/build_apps.py --python "$(command -v python)" --output "$RUNNER_TEMP/mlx-app"
+          python tools/build_apps.py --output "$RUNNER_TEMP/mlx-app"
           codesign --verify --deep --strict "$RUNNER_TEMP/mlx-app/MLX 8080.app"
-          test ! -e "$RUNNER_TEMP/mlx-app/MLX 8080.app/Contents/Resources/src/mlx_activation_lab/server_manager_webapp.py"
+          test -z "$(find "$RUNNER_TEMP/mlx-app/MLX 8080.app/Contents/Resources" -name '*.py' -print)"

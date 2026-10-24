@@ -29,19 +29,15 @@ def make_icon(generator: Path, mode: str, output: Path, scratch: Path) -> None:
             run("/usr/bin/sips", "-z", str(pixels), str(pixels), base, "--out", iconset / filename)
     run("/usr/bin/iconutil", "--convert", "icns", "--output", output, iconset)
 
-def build(output: Path, python: Path, server_root: Path, gguf_root: Path | None) -> Path:
-    # Do not resolve the Python symlink: its venv path selects installed packages.
-    python = python.expanduser().absolute()
+def build(output: Path, server_root: Path, gguf_root: Path | None) -> Path:
     server_root = server_root.expanduser().resolve()
     output = output.expanduser().resolve()
-    if not python.is_file() or not os.access(python, os.X_OK):
-        raise SystemExit(f"Pythonが実行できません: {python}")
     if not (server_root / "start_server.sh").is_file():
         raise SystemExit(f"起動スクリプトがありません: {server_root}")
     if gguf_root is not None:
         gguf_root = gguf_root.expanduser().resolve()
-        if not (gguf_root / "server.py").is_file():
-            raise SystemExit(f"GGUF連携先にserver.pyがありません: {gguf_root}")
+        if not (gguf_root / "profiles.json").is_file():
+            raise SystemExit(f"GGUF連携先にprofiles.jsonがありません: {gguf_root}")
     output.mkdir(parents=True, exist_ok=True)
     target = output / "MLX 8080.app"
     backup = output / ".MLX 8080.backup.app"
@@ -64,27 +60,26 @@ def build(output: Path, python: Path, server_root: Path, gguf_root: Path | None)
         binaries.mkdir(parents=True)
         resources.mkdir()
         cache = scratch / "module-cache"
-        for source, executable, frameworks in [
-            ("WebAppShell.swift", binaries / "MLXAppShell", ["AppKit", "WebKit"]),
-            ("ServerManager.swift", binaries / "MLXServerManager", ["Network", "Security"]),
-            ("MakeIcon.swift", scratch / "MakeIcon", ["AppKit"]),
+        for sources, executable, frameworks in [
+            (["WebAppShell.swift"], binaries / "MLXAppShell", ["AppKit", "WebKit"]),
+            (["ServerManager.swift", "ManagerRuntime.swift", "ManagerModelStore.swift"], binaries / "MLXServerManager", ["Network", "Security"]),
+            (["MakeIcon.swift"], scratch / "MakeIcon", ["AppKit"]),
         ]:
             flags = [value for framework in frameworks for value in ("-framework", framework)]
             run("/usr/bin/swiftc", "-swift-version", "5", "-O",
                 "-target", f"{platform.machine()}-apple-macos14.0", "-module-cache-path", cache,
-                *flags, NATIVE / source, "-o", executable)
-        shutil.copytree(PACKAGE, resources / "src/mlx_activation_lab",
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                *flags, *(NATIVE / source for source in sources), "-o", executable)
+        shutil.copytree(PACKAGE / "server_web", resources / "server_web")
         make_icon(scratch / "MakeIcon", "server", resources / "AppIcon.icns", scratch)
         info = {
             "CFBundleName": "MLX 8080", "CFBundleDisplayName": "MLX 8080",
             "CFBundleExecutable": "MLXAppShell", "CFBundleIdentifier": IDENTIFIER,
-            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "1.1",
-            "CFBundleVersion": "2", "CFBundleIconFile": "AppIcon",
+            "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "2.0",
+            "CFBundleVersion": "3", "CFBundleIconFile": "AppIcon",
             "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True,
             "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},
             "MLXBackendIdentity": "mlx-server-manager", "MLXBackendPort": 8766,
-            "MLXPythonPath": str(python), "MLXServerRoot": str(server_root),
+            "MLXServerRoot": str(server_root),
         }
         if gguf_root is not None:
             info["MLXGGUFRoot"] = str(gguf_root)
@@ -101,18 +96,23 @@ def build(output: Path, python: Path, server_root: Path, gguf_root: Path | None)
             raise
         if backup.exists():
             shutil.rmtree(backup)
+        # The CLI uses the same native launch-record writer as the application.
+        helper = server_root / "build/MLXServerManager"
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        staged_helper = helper.with_suffix(".new")
+        shutil.copy2(target / "Contents/MacOS/MLXServerManager", staged_helper)
+        staged_helper.replace(helper)
     print(target)
     return target
 
 def main():
     parser = argparse.ArgumentParser(description="Build MLX 8080.app")
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
-    parser.add_argument("--python", type=Path, default=ROOT / ".venv/bin/python3")
     parser.add_argument("--server-root", type=Path, default=ROOT)
     parser.add_argument("--gguf-root", type=Path,
-                        help="Optional external GGUF launcher directory (see docs/gguf-integration.md)")
+                        help="Optional GGUF profiles directory (see docs/gguf-integration.md)")
     args = parser.parse_args()
-    build(args.output, args.python, args.server_root, args.gguf_root)
+    build(args.output, args.server_root, args.gguf_root)
 
 if __name__ == "__main__":
     main()

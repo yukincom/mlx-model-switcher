@@ -60,7 +60,9 @@ function render() {
     localStorage.setItem('mlx8080-thinking', String(thinkingEnabled));
   });
   $('#start').addEventListener('click', () => {
-    if (!locked) run('/api/start', {alias: selectedAlias, thinking: thinkingEnabled}, '起動を受け付けました。読込みを確認しています。');
+    // Startup progress belongs to the live server state. A persistent success
+    // notice would falsely imply loading even after readiness or process exit.
+    if (!locked) run('/api/start', {alias: selectedAlias, thinking: thinkingEnabled}, '');
   });
   $('#stop')?.addEventListener('click', () => {
     if (confirm(`8080のモデルを停止しますか？\n${runningName}\nPID: ${server.pid}`))

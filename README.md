@@ -8,17 +8,17 @@ Apple Silicon上のローカルLLMを、macOSアプリまたはターミナル�
 
 ## 構成
 
-- **MLX 8080.app**: AppKit / WKWebViewの画面とSwift製管理サーバー（`127.0.0.1:8766`）。モデル操作時だけPython workerを実行します。
+- **MLX 8080.app**: AppKit / WKWebViewの画面とSwift製管理サーバー（`127.0.0.1:8766`）。モデル一覧、起動停止、設定保存、削除保護もSwiftで実行します。
 - **start_server.sh**: MLX-LMの起動、キャッシュ解決、オフライン設定を担う共通ランチャー。アプリとCLIのどちらも同じ起動経路を使います。
 - **推論プロセス**: 管理アプリから独立して動作します。ウィンドウを閉じる、またはアプリを終了しても推論は継続します。
 
 管理画面の定期ポーリングはありません。管理API操作、起動記録・ログのファイル変更、対象PIDの終了を通知して表示を更新します。エージェントが管理APIや起動スクリプトを使った場合も自動反映します。画面の再表示時には現在の状態を取得します。
 
-標準の推論バックエンドはMLX-LMです。スクリーンショットのGGUFは[外部llama.cppランチャーとの連携](docs/gguf-integration.md)によるもので、このリポジトリにllama.cppやモデル重みは含みません。旧Python製HTTPサーバーへのフォールバックはありません。
+標準の推論バックエンドはMLX-LMです。スクリーンショットのGGUFは[llama.cppとの連携](docs/gguf-integration.md)によるもので、このリポジトリにllama.cppやモデル重みは含みません。Pythonを使用するのはMLX-LMの推論と開発用ツールです。
 
 ## セットアップ
 
-macOS 14以降、Apple Silicon、Python 3.11以降、Xcode Command Line Toolsが必要です。アプリは使用するPython環境とランチャーの絶対パスをビルド時に記録するため、その配置を変更した場合は再ビルドしてください。
+macOS 14以降、Apple Silicon、Python 3.11以降、Xcode Command Line Toolsが必要です。アプリはランチャーの絶対パスをビルド時に記録するため、その配置を変更した場合は再ビルドしてください。
 
 ```bash
 git clone https://github.com/yukincom/mlx-model-switcher.git ~/mlx-server

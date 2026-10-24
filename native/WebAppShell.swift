@@ -11,20 +11,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var incompatibleBackend = false
     private let configuration = Bundle.main.infoDictionary ?? [:]
 
-    private var appName: String { configuration["CFBundleDisplayName"] as? String ?? "MLX App" }
-    private var port: Int { configuration["MLXBackendPort"] as? Int ?? 8765 }
-    private var module: String { configuration["MLXBackendModule"] as? String ?? "" }
-    private var python: String { configuration["MLXPythonPath"] as? String ?? "" }
-    private var expectedApp: String { configuration["MLXBackendIdentity"] as? String ?? "" }
+    private var appName: String { configuration["CFBundleDisplayName"] as? String ?? "MLX 8080" }
+    private var port: Int { configuration["MLXBackendPort"] as? Int ?? 8766 }
+    private var expectedApp: String { "mlx-server-manager" }
     private var baseURL: URL { URL(string: "http://127.0.0.1:\(port)/")! }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         makeMenu()
         NSApp.setActivationPolicy(.regular)
 
-        let isServerManager = expectedApp == "mlx-server-manager"
-        let width: CGFloat = isServerManager ? 800 : 1120
-        let height: CGFloat = isServerManager ? 840 : 830
+        let width: CGFloat = 800
+        let height: CGFloat = 840
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -36,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.title = appName
-        window.minSize = NSSize(width: isServerManager ? 620 : 790, height: 540)
+        window.minSize = NSSize(width: 620, height: 540)
         window.center()
 
         let webConfiguration = WKWebViewConfiguration()
@@ -70,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // Red close, minimize, hide and full occlusion must disconnect UI updates.
     // The inference server has its own lifetime and continues after this window closes.
     private func updateManagerVisibility(_ forced: Bool? = nil) {
-        guard expectedApp == "mlx-server-manager", webView != nil else { return }
+        guard webView != nil else { return }
         let visible = forced ?? (window.isVisible && !window.isMiniaturized && !NSApp.isHidden
             && window.occlusionState.contains(.visible))
         webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('mlx-visibility', {detail: \(visible ? "true" : "false")}));", completionHandler: nil)
@@ -128,8 +125,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         func canonical(_ path: String) -> String {
             URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
         }
+        let environment = ProcessInfo.processInfo.environment
+        let cache = environment["HF_HUB_CACHE"] ?? environment["HF_HOME"].map { $0 + "/hub" }
+            ?? environment["XDG_CACHE_HOME"].map { $0 + "/huggingface/hub" }
+            ?? home.appendingPathComponent(".cache/huggingface/hub").path
         return ["resources": canonical(Bundle.main.resourceURL!.path),
-                "python": URL(fileURLWithPath: python).standardizedFileURL.path,
+                "cache_root": canonical(cache),
                 "state_root": canonical(state),
                 "server_root": canonical(configuration["MLXServerRoot"] as? String
                     ?? home.appendingPathComponent("mlx-server").path),
@@ -148,9 +149,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                (response as? HTTPURLResponse)?.statusCode == 200,
                let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                payload["app"] as? String == self.expectedApp {
-                ready = self.expectedApp != "mlx-server-manager"
-                    || (payload["backend"] as? String == "swift" && payload["protocol"] as? Int == 1
-                        && payload["configuration"] as? [String: String] == self.expectedBackendConfiguration)
+                ready = payload["backend"] as? String == "swift" && payload["protocol"] as? Int == 2
+                    && payload["configuration"] as? [String: String] == self.expectedBackendConfiguration
                 self.incompatibleBackend = !ready
             }
             semaphore.signal()
@@ -174,38 +174,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         }
 
         let process = Process()
-        if expectedApp == "mlx-server-manager" {
-            process.executableURL = Bundle.main.executableURL?.deletingLastPathComponent()
-                .appendingPathComponent("MLXServerManager")
-            process.arguments = ["--port", String(port), "--python", python,
-                                 "--resources", resources.path]
-        } else {
-            guard FileManager.default.isExecutableFile(atPath: python) else {
-                showMessage("Pythonが見つかりません。アプリを再ビルドしてください。")
-                return
-            }
-            process.executableURL = URL(fileURLWithPath: python)
-            process.arguments = ["-m", module, "--host", "127.0.0.1", "--port", String(port), "--no-browser"]
-        }
+        process.executableURL = Bundle.main.executableURL?.deletingLastPathComponent()
+            .appendingPathComponent("MLXServerManager")
+        process.arguments = ["--port", String(port), "--resources", resources.path]
         process.currentDirectoryURL = resources
         var environment = ProcessInfo.processInfo.environment
-        environment["PYTHONPATH"] = resources.appendingPathComponent("src").path
-        environment["PYTHONDONTWRITEBYTECODE"] = "1"
-        if expectedApp == "mlx-server-manager" {
-            if let root = configuration["MLXServerRoot"] as? String {
-                environment["MLX_ACTIVATION_LAB_SERVER_ROOT"] = root
-            }
+        if let root = configuration["MLXServerRoot"] as? String {
+            environment["MLX_ACTIVATION_LAB_SERVER_ROOT"] = root
         }
         if let root = configuration["MLXGGUFRoot"] as? String {
             environment["MLX_MANAGER_GGUF_ROOT"] = root
         } else {
             environment.removeValue(forKey: "MLX_MANAGER_GGUF_ROOT")
-        }
-        if let home = configuration["MLXLabStatePath"] as? String {
-            environment["MLX_ACTIVATION_LAB_HOME"] = home
-        }
-        if let workspace = configuration["MLXLabWorkspacePath"] as? String {
-            environment["MLX_ACTIVATION_LAB_WORKSPACE"] = workspace
         }
         process.environment = environment
 
@@ -224,7 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let readinessLock = NSLock()
         var received = Data()
         var nativeReady = false
-        if expectedApp == "mlx-server-manager" {
+        do {
             let output = Pipe()
             backendOutput = output
             process.standardOutput = output
@@ -249,25 +229,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             showMessage("管理プロセスを起動できません: \(error.localizedDescription)")
             return
         }
-        if expectedApp == "mlx-server-manager" {
-            _ = readiness.wait(timeout: .now() + 120)
-            backendOutput?.fileHandleForReading.readabilityHandler = nil
-            readinessLock.lock()
-            let ready = nativeReady
-            readinessLock.unlock()
-            if ready && process.isRunning { openPage() }
-            else { showMessage("管理プロセスの起動を確認できません。ログ: \(logPath.path)") }
-            return
-        }
-        for _ in 0..<100 {
-            Thread.sleep(forTimeInterval: 0.2)
-            if backendIsReady() {
-                openPage()
-                return
-            }
-            if !process.isRunning { break }
-        }
-        showMessage("管理プロセスの起動に失敗しました。\nログ: \(logPath.path)")
+        _ = readiness.wait(timeout: .now() + 120)
+        backendOutput?.fileHandleForReading.readabilityHandler = nil
+        readinessLock.lock()
+        let ready = nativeReady
+        readinessLock.unlock()
+        if ready && process.isRunning { openPage() }
+        else { showMessage("管理プロセスの起動を確認できません。ログ: \(logPath.path)") }
     }
 
     private func openPage() {

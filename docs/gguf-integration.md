@@ -1,19 +1,24 @@
-# 外部GGUFランチャーとの連携
+# GGUFとの連携
 
-GGUFの起動設定を管理アプリ内へ複製せず、指定した外部ランチャーの `server.py` を利用する。標準セットアップでは無効。一般的な任意のGGUFファイルを選べば起動できる機能ではない。
+Swift管理サーバーが `profiles.json` を読み、指定したllama.cpp実行ファイルを直接起動する。モデル一覧・起動停止・ファイル検証・削除保護にPythonは使わない。標準セットアップではGGUF連携は無効。
 
 ```bash
-.venv/bin/python tools/build_apps.py --gguf-root /absolute/path/to/launcher
+python3 tools/build_apps.py --gguf-root /absolute/path/to/gguf
 ```
 
-指定先のPythonコードをモデル操作worker内で実行するため、自分が管理する信頼済みランチャーだけを設定する。モデル重みや推論実行ファイルの導入・更新は連携先が担う。
+設定例は [`examples/gguf/profiles.json`](../examples/gguf/profiles.json)。指定ディレクトリへ `profiles.json` として置く。モデル重みと推論実行ファイルの導入・更新は別途行う。
 
-連携先には次の契約が必要。
+- `models_root`: 重みの保存先。絶対パスまたは `~/` で指定する。
+- `binary`: 設定ディレクトリ内のllama.cpp実行ファイルへの相対パス。
+- `profiles`: `target`, `alias`, `model`, `name`, `manifest`, `model_file`, `arguments`, `required_verifications` を持つモデル記述。
+- `manifest`: 設定ディレクトリ内のJSONへの相対パス。`files` 配列の各項目は `directory`, `file`, `bytes` を持ち、重みは `models_root/directory/file` に置く。分割GGUF、mmproj、draftも全て含める。
+- `model_file`: manifest内で一意になるメインモデルのファイル名。ディレクトリ部分は含めない。
+- `arguments`: 追加引数の配列。`{model:ファイル名}` はmanifestで検証したファイルの絶対パスに置換する。mmproj・draftもこの形式で指定する。
+- `required_verifications`: 事前検証の記録ファイルへの相対パスの配列。起動時に存在を検査し、重みはmanifestのサイズと照合する。
+- `environment` / `unset_environment`: モデル固有の環境変数の設定・解除。先読みモデルの設定を別モデルへ引き継がない場合に用いる。
 
-- `gguf_profiles()`が `alias`, `model`, `name`, `manifest`, `target` を持つモデル記述を返す。
-- `start_gguf_if_idle(target, thinking=bool)`が排他・空きポート・モデル検証を行い、独立した推論プロセスのPIDを返す。
-- `RECORD`と `is_our_llama(current)`で起動記録とプロセスの同一性を照合できる。`current`は `pid`, `command` を持つdictで、記録には `target` が必須。
-- manifestの `files` は `directory`, `file`, `bytes` を持ち、ファイルは連携先の `models/` 配下に置く。
-- 起動記録は `evidence/llama-server.json` / `evidence/managed-server.json`、ログは `logs/llama-server.log` に書く。これらの変更をSwift側でも監視する。
+モデル、Thinking、host、port、API上のaliasは管理側が設定するため `arguments` では上書きできない。起動記録は `evidence/llama-server.json` / `evidence/managed-server.json`、ログは `logs/llama-server.log` に保存し、その変更とPID終了を画面へ通知する。
 
-モデル別manifestを削除確認に使用する。パストラバーサルやsymlinkを拒否し、使用中の重み、mmproj、draft model、共有ファイルを削除対象にしない。APIの詳細な呼出形式は `src/mlx_activation_lab/manager_models.py` が正本。
+削除確認にはモデル別manifestを使い、パストラバーサルと親ディレクトリを含むsymlinkを拒否する。使用中の重み、mmproj、draft、共有ファイルを保護し、確認後にファイルや設定が変わった場合は削除しない。
+
+ローカルでは設定と実行ファイルを `gguf/` に置き、モデル本体を `~/.cache/gguf/models/` に分離できる。実行ファイルとモデルはGit管理に含めない。構成を指定してビルドする例は `--gguf-root "$PWD/gguf"`。

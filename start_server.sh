@@ -428,7 +428,12 @@ if [ "$PORT" = "8080" ]; then
     # Keep terminal output while notifying the app when loading reaches readiness.
     exec > >(tee -a "$MANAGER_STATE_DIR/mlx-server.log") 2>&1
   fi
-  python3 -I -B "$SCRIPT_DIR/tools/record_launch.py" "$$" "$ALIAS" "$THINKING_MODE"
+  MANAGER_EXECUTABLE="${MLX_MANAGER_EXECUTABLE:-$SCRIPT_DIR/build/MLXServerManager}"
+  if [[ ! -x "$MANAGER_EXECUTABLE" ]]; then
+    echo "❌ 管理ヘルパーがありません。python3 tools/build_apps.py を実行してください。" >&2
+    exit 1
+  fi
+  "$MANAGER_EXECUTABLE" --record-start "$$" --alias "$ALIAS" --thinking "$THINKING_MODE"
 fi
 
 # このサーバープロセスだけをオフライン化する。

@@ -3,8 +3,8 @@ import Network
 import Security
 import Darwin
 
-// The native process owns the listening socket and the operation queue. Model operations
-// use the existing safety checks through a short-lived, isolated stdin/stdout worker.
+// HTTP, model operations and OS notifications run in this native process.
+// Only the selected inference engine is started as a separate process.
 struct HTTPFailure: Error {
     let status: Int
     let message: String
@@ -93,7 +93,7 @@ struct Response {
 }
 
 // State changes come from filesystem/process notifications, not a recurring timer.
-// Polling while the window is idle or closed wastes CPU and repeatedly starts Python.
+// Polling while the window is idle or closed would repeatedly scan unchanged model files.
 // The short delay below only coalesces a burst of actual filesystem events.
 final class StateFiles {
     let paths: [String]
@@ -163,7 +163,7 @@ final class StateFiles {
 final class Manager {
     let port: UInt16
     let resources: URL
-    let python: String
+    let modelOperations: ModelOperations
     let token: String
     let operations = DispatchQueue(label: "mlx.manager.operations")
     let io = DispatchQueue(label: "mlx.manager.connections")
@@ -176,10 +176,10 @@ final class Manager {
     var observedPID: Int32?
     var pendingChange: DispatchWorkItem?
 
-    init(port: UInt16, resources: URL, python: String) throws {
+    init(port: UInt16, resources: URL) throws {
         self.port = port
         self.resources = resources
-        self.python = python
+        self.modelOperations = ModelOperations(configuration: .environment())
         var bytes = [UInt8](repeating: 0, count: 32)
         guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else {
             throw HTTPFailure(status: 500, message: "cannot generate token")
@@ -188,20 +188,11 @@ final class Manager {
     }
 
     var configurationIdentity: [String: String] {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let environment = ProcessInfo.processInfo.environment
-        let state = environment["MLX_MANAGER_STATE_ROOT"]
-            ?? home.appendingPathComponent("Library/Application Support/MLX Server Manager").path
-        func canonical(_ path: String) -> String {
-            URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath().path
-        }
-        return ["resources": canonical(resources.path),
-                "python": URL(fileURLWithPath: python).standardizedFileURL.path,
-                "state_root": canonical(state),
-                "server_root": canonical(environment["MLX_ACTIVATION_LAB_SERVER_ROOT"]
-                    ?? home.appendingPathComponent("mlx-server").path),
-                "gguf_root": canonical(environment["MLX_MANAGER_GGUF_ROOT"]
-                    ?? URL(fileURLWithPath: state).appendingPathComponent("gguf").path)]
+        let configuration = modelOperations.configuration
+        func canonical(_ path: URL) -> String { path.standardizedFileURL.resolvingSymlinksInPath().path }
+        return ["resources": canonical(resources), "state_root": canonical(configuration.stateRoot),
+                "server_root": canonical(configuration.serverRoot), "gguf_root": canonical(configuration.ggufRoot),
+                "cache_root": canonical(configuration.cacheRoot)]
     }
 
     func run() throws {
@@ -254,14 +245,14 @@ final class Manager {
             runtime.appendingPathComponent("evidence/managed-server.json").path,
             runtime.appendingPathComponent("evidence/llama-server.json").path,
             runtime.appendingPathComponent("logs/llama-server.log").path,
-            runtime.appendingPathComponent("server.py").path,
+            runtime.appendingPathComponent("profiles.json").path,
         ], queue: io) { [weak self] in self?.stateChanged() }
         listener.start(queue: io)
     }
 
     func stateChanged() {
         // Coalesce notifications from one operation (record, log and API response).
-        // There is no periodic task and no Python worker when the UI is disconnected.
+        // There is no periodic task or background model scan when the UI is disconnected.
         guard pendingChange == nil, !streams.isEmpty else { return }
         let event = DispatchWorkItem { [weak self] in
             guard let self else { return }
@@ -312,7 +303,7 @@ final class Manager {
         if request.method == "GET" {
             guard request.body.isEmpty else { completion(.error(400, "unexpected body")); return }
             if request.path == "/api/health" {
-                completion(.json(["app": "mlx-server-manager", "backend": "swift", "protocol": 1,
+                completion(.json(["app": "mlx-server-manager", "backend": "swift", "protocol": 2,
                                   "configuration": configurationIdentity])); return
             }
             if request.path == "/api/events" { completion(.events()); return }
@@ -320,7 +311,7 @@ final class Manager {
                          "/style.css": ("style.css", "text/css")]
             if let (name, mime) = pages[request.path] {
                 do {
-                    let path = resources.appendingPathComponent("src/mlx_activation_lab/server_web/" + name)
+                    let path = resources.appendingPathComponent("server_web/" + name)
                     var data = try Data(contentsOf: path)
                     if name == "index.html" {
                         data = Data(String(decoding: data, as: UTF8.self)
@@ -344,61 +335,33 @@ final class Manager {
             else { throw HTTPFailure(status: 400, message: "JSON objectを送ってください") }
         } catch { completion(.error(400, "JSON objectを送ってください")); return }
         operations.async {
-            let result = self.worker(method: request.method, path: request.path, payload: payload)
+            let result = self.execute(method: request.method, path: request.path, payload: payload)
             self.io.async { completion(result) }
         }
     }
 
-    func worker(method: String, path: String, payload: [String: Any]) -> Response {
-        guard FileManager.default.isExecutableFile(atPath: python) else {
-            return .error(503, "モデル操作用Pythonが見つかりません。アプリを再ビルドしてください。")
+    func execute(method: String, path: String, payload: [String: Any]) -> Response {
+        defer {
+            // Partial failures may already have changed files or started a child.
+            if method == "POST", path != "/api/delete-preview" { io.async { self.stateChanged() } }
         }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: python)
-        process.arguments = ["-I", "-B", resources.appendingPathComponent("src/mlx_activation_lab/manager_bridge.py").path]
-        process.currentDirectoryURL = resources
-        var environment = ProcessInfo.processInfo.environment
-        environment["HF_HUB_OFFLINE"] = "1"
-        environment["TRANSFORMERS_OFFLINE"] = "1"
-        process.environment = environment
-        let input = Pipe(), output = Pipe()
-        process.standardInput = input
-        process.standardOutput = output
-        process.standardError = FileHandle.standardError
         do {
-            let data = try JSONSerialization.data(withJSONObject: ["method": method, "path": path, "payload": payload])
-            try process.run()
-            try input.fileHandleForWriting.write(contentsOf: data)
-            try input.fileHandleForWriting.close()
-            let received = output.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0,
-                  let envelope = try JSONSerialization.jsonObject(with: received) as? [String: Any],
-                  let status = envelope["status"] as? Int, [200, 400, 404, 405].contains(status),
-                  var result = envelope["payload"] as? [String: Any] else {
-                return .error(500, "モデル操作プロセスの応答を確認できません。ログを確認してください。")
-            }
-            if path == "/api/status", status == 200 {
+            var result = try modelOperations.dispatch(method: method, path: path, payload: payload)
+            if path == "/api/status" {
                 result["token"] = token
                 let server = result["server"] as? [String: Any]
-                let pid = (server?["running"] as? Bool == true) ? (server?["pid"] as? Int32) : nil
+                let pid = (server?["running"] as? Bool == true) ? (server?["pid"] as? NSNumber)?.int32Value : nil
                 io.async { self.observeProcess(pid) }
             }
-            if method == "POST", path != "/api/delete-preview", status == 200 {
-                let pid = (result["result"] as? [String: Any])?["pid"] as? Int32
-                io.async {
-                    if path == "/api/start" { self.observeProcess(pid) }
-                    self.stateChanged()
-                }
+            if path == "/api/start", let pid = (result["result"] as? [String: Any])?["pid"] as? NSNumber {
+                io.async { self.observeProcess(pid.int32Value) }
             }
-            return .json(result, status: status)
+            return .json(result)
         } catch {
-            try? input.fileHandleForWriting.close()
-            if process.isRunning { process.terminate(); process.waitUntilExit() }
-            fputs("Worker failed: \(error)\n", stderr)
-            return .error(500, "モデル操作プロセスを実行できません。ログを確認してください。")
+            return .error(400, error.localizedDescription)
         }
     }
+
 }
 
 final class Client {
@@ -464,24 +427,35 @@ final class Client {
     func dispose() { timer?.cancel(); timer = nil; manager.streams.remove(id); manager.clients.removeValue(forKey: id) }
 }
 
-do {
-    let args = Array(CommandLine.arguments.dropFirst())
-    var options: [String: String] = [:]
-    guard args.count % 2 == 0 else { throw HTTPFailure(status: 400, message: "invalid arguments") }
-    for index in stride(from: 0, to: args.count, by: 2) {
-        guard ["--port", "--resources", "--python"].contains(args[index]), options[args[index]] == nil else {
-            throw HTTPFailure(status: 400, message: "unknown or duplicate option")
+@main
+struct NativeManagerMain {
+    static func main() {
+        do {
+            let args = Array(CommandLine.arguments.dropFirst())
+            var options: [String: String] = [:]
+            guard args.count % 2 == 0 else { throw ManagerError("invalid arguments") }
+            for index in stride(from: 0, to: args.count, by: 2) {
+                guard ["--port", "--resources", "--record-start", "--alias", "--thinking"].contains(args[index]),
+                      options[args[index]] == nil else { throw ManagerError("unknown or duplicate option") }
+                options[args[index]] = args[index + 1]
+            }
+            if let text = options["--record-start"] {
+                guard options.count == 3, let pid = Int32(text), let alias = options["--alias"],
+                      let thinking = options["--thinking"], ["off", "on", "low", "medium", "xhigh"].contains(thinking) else {
+                    throw ManagerError("--record-start PID --alias ALIAS --thinking MODE are required")
+                }
+                try ProcessController.recordStart(configuration: .environment(), pid: pid, alias: alias, thinking: thinking != "off")
+                return
+            }
+            guard options.keys.allSatisfy({ ["--port", "--resources"].contains($0) }),
+                  let port = UInt16(options["--port"] ?? "8766"), port > 0,
+                  let resources = options["--resources"] else { throw ManagerError("--resources is required") }
+            let manager = try Manager(port: port, resources: URL(fileURLWithPath: resources))
+            try manager.run()
+            withExtendedLifetime(manager) { dispatchMain() }
+        } catch {
+            fputs("MLXServerManager: \(error.localizedDescription)\n", stderr)
+            exit(1)
         }
-        options[args[index]] = args[index + 1]
     }
-    guard let port = UInt16(options["--port"] ?? "8766"), port > 0,
-          let resources = options["--resources"], let python = options["--python"] else {
-        throw HTTPFailure(status: 400, message: "--port, --resources and --python are required")
-    }
-    let manager = try Manager(port: port, resources: URL(fileURLWithPath: resources), python: python)
-    try manager.run()
-    withExtendedLifetime(manager) { dispatchMain() }
-} catch {
-    fputs("MLXServerManager: \(error)\n", stderr)
-    exit(1)
 }

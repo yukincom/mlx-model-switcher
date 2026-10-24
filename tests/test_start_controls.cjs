@@ -49,6 +49,7 @@ test('checkbox choice persists across renders and reaches the start request as b
     await new Promise(resolve=>setImmediate(resolve));
     assert.deepEqual(ui.calls,[{url:'/api/start',payload:{alias:'b',thinking:enabled}}]);
     assert.equal(ui.storage.get('mlx8080-thinking'),String(enabled));
+    assert.equal(ui.node('#message').textContent, '');
     assert.equal(ui.node('#thinking-enabled').disabled,true);
   }
 });

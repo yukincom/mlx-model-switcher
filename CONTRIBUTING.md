@@ -2,11 +2,10 @@
 
 ## テスト
 
-管理アプリを含むテストにはPython 3.11以降、Node.js、`huggingface-hub`が必要です。macOSではSwiftコンパイラも使用します。MLXやモデル重みは不要です。
+管理アプリを含むテストにはPython 3.11以降、Node.jsが必要です。macOSではSwiftコンパイラも使用します。MLXやモデル重みは不要です。
 
 ```bash
 /bin/bash -n start_server.sh
-python3 -m pip install 'huggingface-hub==1.12.0'
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -v
 node --test tests/*.cjs
 ```
@@ -22,7 +21,7 @@ node --test tests/*.cjs
 - ローカル起動コマンドへの引数転送と終了コードの保持
 - ストリーミング応答の時間計測と、途中切断の検出
 - 削除対象・共有ファイル・使用中モデル・確認fingerprintの検証
-- 管理HTTPのtoken、Host/Origin、body上限、要求の直列化、worker終了
+- 管理HTTPのtoken、Host/Origin、body上限、要求の直列化、終了時の受理済み操作の完了
 - SSE、ファイル変更、PID終了、ウィンドウの表示状態に応じた更新
 - 起動スクリプトの起動記録と、定期ポーリングを使わないUI
 
@@ -35,10 +34,10 @@ MLXによる推論速度、音声、各アプリや実機との接続はCIの検
 ## アプリのビルド
 
 ```bash
-python3 tools/build_apps.py --python /absolute/path/to/venv/bin/python3
+python3 tools/build_apps.py
 ```
 
-出力は `dist/MLX 8080.app`。`--output`で配置先、`--server-root`で既存の `start_server.sh` と `models.conf` のあるディレクトリを指定できます。モデル操作用Pythonはsymlinkの参照先へ展開せず、venv内のパスを保持します。生成物はローカルのad hoc署名付きで、Developer ID署名・公証・配布用リリースの生成は行いません。
+出力は `dist/MLX 8080.app`。`--output`で配置先、`--server-root`で既存の `start_server.sh` と `models.conf` のあるディレクトリを指定できます。管理アプリにPythonソースは同梱しません。CLI用の同じSwift実行ファイルを `--server-root` 配下の `build/MLXServerManager` に配置します。生成物はローカルのad hoc署名付きで、Developer ID署名・公証・配布用リリースの生成は行いません。
 
 コード・画面はbundleへコピーされます。変更後は実アプリを終了してから再ビルドします。既存アプリを置き換える前にbundle IDと実行状態を検査し、ステージした成果物を同一ファイルシステム内でrenameします。
 

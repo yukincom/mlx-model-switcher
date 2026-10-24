@@ -1,5 +1,5 @@
-import os
 from pathlib import Path
+import platform
 import select
 import subprocess
 import sys
@@ -16,8 +16,9 @@ class NativeStateEventTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory(prefix="mlx-state-tests-")
+        cls.addClassCleanup(cls.temporary.cleanup)
         folder = Path(cls.temporary.name)
-        source = (ROOT / 'native/ServerManager.swift').read_text().split('\ndo {\n    let args =')[0]
+        source = (ROOT / 'native/ServerManager.swift').read_text().split('\n@main\n')[0]
         source += '''
 let queue = DispatchQueue(label: "fixture")
 let watcher = StateFiles(paths: [CommandLine.arguments[1]], queue: queue) {
@@ -29,12 +30,11 @@ withExtendedLifetime(watcher) { dispatchMain() }
         (folder / 'main.swift').write_text(source)
         cls.binary = folder / 'observer'
         subprocess.run(['/usr/bin/swiftc', '-swift-version', '5', '-module-cache-path', str(folder / 'cache'),
-                        '-framework', 'Network', '-framework', 'Security', str(folder / 'main.swift'),
-                        '-o', str(cls.binary)], check=True, capture_output=True)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.temporary.cleanup()
+                        '-target', f'{platform.machine()}-apple-macos14.0',
+                        '-framework', 'Network', '-framework', 'Security',
+                        str(ROOT / 'native/ManagerRuntime.swift'), str(ROOT / 'native/ManagerModelStore.swift'),
+                        str(folder / 'main.swift'), '-o', str(cls.binary)], check=True, capture_output=True,
+                       timeout=120)
 
     def line(self, process, timeout=2):
         self.assertTrue(select.select([process.stdout], [], [], timeout)[0], 'notification did not arrive')
