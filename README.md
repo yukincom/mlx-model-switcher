@@ -26,8 +26,8 @@ cd ~/mlx-server
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip certifi
 .venv/bin/python -m pip install 'mlx-lm==0.31.3'
-.venv/bin/python tools/build_apps.py
-open 'dist/MLX 8080.app'
+.venv/bin/python tools/build_apps.py --output /Applications
+open '/Applications/MLX 8080.app'
 ```
 
 モデルは事前にダウンロードしてください。アプリの「モデル一覧」からHugging Faceキャッシュ内のモデルを登録できます。`models.conf`を編集する場合は、1行を `alias=Hugging Face ID` または `alias=/absolute/path/to/model` とします。相対パスは `./models/example` のように指定します。起動時に不足ファイルを自動ダウンロードしたり、remote codeを有効化したりはしません。

@@ -39,6 +39,8 @@ python3 tools/build_apps.py
 
 出力は `dist/MLX 8080.app`。`--output`で配置先、`--server-root`で既存の `start_server.sh` と `models.conf` のあるディレクトリを指定できます。管理アプリにPythonソースは同梱しません。CLI用の同じSwift実行ファイルを `--server-root` 配下の `build/MLXServerManager` に配置します。生成物はローカルのad hoc署名付きで、Developer ID署名・公証・配布用リリースの生成は行いません。
 
+通常使用するアプリは `--output /Applications` で配置します。GGUF連携を使う既存構成の更新では、`--gguf-root /absolute/path/to/gguf` も指定してください。アプリbundle自体は移動できますが、ビルド時に指定したサーバーやGGUF設定のディレクトリを移動した場合は再ビルドが必要です。
+
 コード・画面はbundleへコピーされます。変更後は実アプリを終了してから再ビルドします。既存アプリを置き換える前にbundle IDと実行状態を検査し、ステージした成果物を同一ファイルシステム内でrenameします。
 
 `src/mlx_activation_lab`は管理部分を抽出した既存パッケージ名です。実験ラボ本体への実行時依存はありません。

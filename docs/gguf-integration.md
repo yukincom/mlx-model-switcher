@@ -3,7 +3,7 @@
 Swift管理サーバーが `profiles.json` を読み、指定したllama.cpp実行ファイルを直接起動する。モデル一覧・起動停止・ファイル検証・削除保護にPythonは使わない。標準セットアップではGGUF連携は無効。
 
 ```bash
-python3 tools/build_apps.py --gguf-root /absolute/path/to/gguf
+python3 tools/build_apps.py --output /Applications --gguf-root /absolute/path/to/gguf
 ```
 
 設定例は [`examples/gguf/profiles.json`](../examples/gguf/profiles.json)。指定ディレクトリへ `profiles.json` として置く。モデル重みと推論実行ファイルの導入・更新は別途行う。
