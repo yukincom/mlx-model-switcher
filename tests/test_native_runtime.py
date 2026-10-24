@@ -98,6 +98,57 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertIs(value["record"]["thinking"], True)
         self.assertTrue(value["record"]["started"])
 
+    def assertReapedByLauncher(self, value):
+        self.assertIs(value["gone_before_fixture_wait"], True, value)
+        self.assertEqual(value["wait_result"], -1, value)
+        self.assertEqual(value["wait_errno"], value["echild"], value)
+
+    def test_detached_sleep_has_exact_argv_own_session_and_is_reaped_after_discard(self):
+        value = self.request("detached-sleep")
+        self.assertEqual(value["arguments"], ["/bin/sleep", "30"])
+        self.assertEqual(value["session"], value["pid"])
+        self.assertEqual(value["process_group"], value["pid"])
+        self.assertNotEqual(value["session"], value["parent_session"])
+        self.assertReapedByLauncher(value)
+
+    def test_detached_child_receives_cwd_environment_null_stdin_and_redirected_logs(self):
+        value = self.request("detached-context")
+        expected = [str(self.binary), "fixture-child", "two words 日本語", ""]
+        self.assertEqual(value["arguments"], expected)
+        self.assertEqual(value["child"]["arguments"], expected)
+        self.assertEqual(value["child"]["cwd"], str(self.root))
+        self.assertEqual(value["child"]["environment"], "fixture environment 日本語")
+        self.assertEqual(value["child"]["stdin_bytes"], 0)
+        self.assertIs(value["stderr_redirected"], True)
+        self.assertReapedByLauncher(value)
+
+    def test_record_save_failure_discards_and_reaps_only_the_launched_fixture_child(self):
+        binary = self.root / "gguf/runtime/bin/fixture-sleep"
+        binary.parent.mkdir(parents=True)
+        # Ignores the generated model arguments; it only execs a known local
+        # sleep under the same PID. No model engine or socket is involved.
+        binary.write_text("#!/bin/sh\nexec /bin/sleep 30\n", encoding="utf-8")
+        binary.chmod(0o700)
+        weights = self.root / "weights"
+        weights.mkdir()
+        (weights / "fixture.gguf").write_bytes(b"x")
+        (self.root / "gguf/manifest.json").write_text(json.dumps({"files": [
+            {"directory": ".", "file": "fixture.gguf", "bytes": 1},
+        ]}), encoding="utf-8")
+        (self.root / "gguf/profiles.json").write_text(json.dumps({
+            "models_root": str(weights), "binary": "runtime/bin/fixture-sleep", "profiles": [{
+                "target": "failure-fixture", "alias": "gguf:failure-fixture", "model": "failure-fixture",
+                "name": "Failure fixture", "manifest": "manifest.json", "model_file": "fixture.gguf",
+                "required_verifications": [], "arguments": [],
+            }],
+        }), encoding="utf-8")
+        value = self.request("failed-record-cleanup")
+        self.assertGreater(value["pid"], 1)
+        self.assertTrue(value["failure"], value)
+        self.assertIs(value["record_is_directory"], True)
+        self.assertEqual(value["terminated"], [])
+        self.assertReapedByLauncher(value)
+
     def test_json_boolean_type_is_not_coerced_from_numbers_or_strings(self):
         values = [True, False, 1, 0, 1.0, 0.0, 2, "true", "false", None, {}, []]
         self.assertEqual(self.request("strict-bools", values=values), [True, False] + [None] * 10)

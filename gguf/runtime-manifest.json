@@ -1,0 +1,211 @@
+{
+  "source_repository": "https://github.com/hokar3361/moe-on-a-desk",
+  "source_revision": "7dac0e43b541cf32aba7e366e9ed62ceab680021",
+  "llama_cpp_base": "781dbc5ac98921dbdb5e5b2ec5b7a50960e937d4",
+  "patch_count": 55,
+  "source_build": "runtime/llama.cpp/build-14a/bin",
+  "relocation": "LC_RPATH changed to @loader_path, then ad hoc signed; weights remain external",
+  "files": [
+    {
+      "file": "llama-server",
+      "source_sha256": "a98963e08d08ab3f247d3ed8268cbf45a767917ff9c76a0a137f85cecdfce7e0",
+      "sha256": "28e5d09f2791aea9b49fb8173c61f2923ac44e174a9b53ad5f4705df6e6a7b74",
+      "bytes": 67840,
+      "dependencies": [
+        "@rpath/libllama-server-impl.dylib",
+        "@rpath/libllama-common.0.dylib",
+        "@rpath/libmtmd.0.dylib",
+        "@rpath/libllama.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib",
+        "/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libllama-server-impl.dylib",
+      "source_sha256": "1eb23106a22799b78a231ca47de3024c0313f90b40c777605bd47c6ed35efd55",
+      "sha256": "947f4427a946bde14e2f274d4eff03d9de94645ec0991940f81b0460ae2f3f25",
+      "bytes": 6637056,
+      "dependencies": [
+        "@rpath/libllama-server-impl.dylib",
+        "@rpath/libllama-common.0.dylib",
+        "@rpath/libmtmd.0.dylib",
+        "@rpath/libllama.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib",
+        "/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libllama-common.0.dylib",
+      "source_sha256": "714bc8902294919ff3f342e68182192309872c386c2bd70adf30ff85ffe4e000",
+      "sha256": "8233d1e2ae6db914e24471fac8e3efb251b15df1d2cdb318404305683825a280",
+      "bytes": 5309760,
+      "dependencies": [
+        "@rpath/libllama-common.0.dylib",
+        "@rpath/libllama.0.dylib",
+        "/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib",
+        "/opt/homebrew/opt/openssl@3/lib/libcrypto.3.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libmtmd.0.dylib",
+      "source_sha256": "0d38dcbf0373a3c2b8c0d5c2488ad91de7660c979f5b7f845a5ab1f9e93ad72b",
+      "sha256": "bbe8308682e6eb07c0647c3696520f62bf44abd0b566da05292a94f15bc1c8a3",
+      "bytes": 1418256,
+      "dependencies": [
+        "@rpath/libmtmd.0.dylib",
+        "@rpath/libllama.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libllama.0.dylib",
+      "source_sha256": "07153ae99b5026dae71c516c8a6ffac2d914fccc3258ddd28a0b7a31ab906f7a",
+      "sha256": "94e09abc6e6f1e901cffbbbcde221012d378df05efb552a66aa987c2996deb69",
+      "bytes": 3447984,
+      "dependencies": [
+        "@rpath/libllama.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libggml.0.dylib",
+      "source_sha256": "c19a4f5f3e5280cd682d840facedac1b8525352302b393751e5818af197038b4",
+      "sha256": "5d76022b1b6e0e08cbb045e1da52fb8e6b25607a9827859944b3bfb268de38f0",
+      "bytes": 77968,
+      "dependencies": [
+        "@rpath/libggml.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libggml-cpu.0.dylib",
+      "source_sha256": "7969b12f3c2b55cd37ed0834f439cf198c4c6caaaf09133363b151727a347850",
+      "sha256": "6dee8690d7d9bfb4fce2882a97073b649034e740ed96384a55921f524de5727a",
+      "bytes": 1019440,
+      "dependencies": [
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libggml-blas.0.dylib",
+      "source_sha256": "bac7cce303f241f33f103d17182b14eb663c760a60ef91aa49823035560d0696",
+      "sha256": "43a1ba73527e3ab810a8531ed70f386e42e69a03574ccb626b09161cbae77e62",
+      "bytes": 76512,
+      "dependencies": [
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libggml-metal.0.dylib",
+      "source_sha256": "e62999ae21d4fa1085cb217c8e02357fa1f61a93f76f605750d3b0d26f87cc01",
+      "sha256": "75cdf668d58c1b94cfdf530160cc0e151858c89b54373cad626283787b581b12",
+      "bytes": 5648432,
+      "dependencies": [
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+        "/System/Library/Frameworks/MetalKit.framework/Versions/A/MetalKit",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/usr/lib/libobjc.A.dylib"
+      ],
+      "rpaths": [
+        "@loader_path"
+      ]
+    },
+    {
+      "file": "libggml-base.0.dylib",
+      "source_sha256": "3399d084e5ef122eeeee19de76d9b4ae0a6531e814e838d67d0ff162f8c3c450",
+      "sha256": "1b163d3a3852b3b342e998d90e3f96d9b8e013fb9f1d2845812d7ea694319a6c",
+      "bytes": 767824,
+      "dependencies": [
+        "@rpath/libggml-base.0.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib"
+      ],
+      "rpaths": []
+    }
+  ],
+  "adopted_runtime_commit": "6190802c8d3391ee908fb254d12fc243ad4540c6",
+  "preserved_source_head": "93cf9d707cb35bf7e6d63e29a352cf3fb4e96771",
+  "rebuild_config": "runtime/build-config.json",
+  "source_bundle": "runtime/source-patches.bundle"
+}

@@ -21,4 +21,4 @@ python3 tools/build_apps.py --gguf-root /absolute/path/to/gguf
 
 削除確認にはモデル別manifestを使い、パストラバーサルと親ディレクトリを含むsymlinkを拒否する。使用中の重み、mmproj、draft、共有ファイルを保護し、確認後にファイルや設定が変わった場合は削除しない。
 
-ローカルでは設定と実行ファイルを `gguf/` に置き、モデル本体を `~/.cache/gguf/models/` に分離できる。実行ファイルとモデルはGit管理に含めない。構成を指定してビルドする例は `--gguf-root "$PWD/gguf"`。
+採用済みのローカル起動設定は `gguf/profiles.json`、モデル本体は `~/.cache/gguf/models/` に分離する。推論実行ファイルは `gguf/runtime/bin/`、由来とハッシュは `gguf/runtime-manifest.json` に記録する。実行ファイルとモデルはGit管理に含めない。構成を指定してビルドする例は `--gguf-root "$PWD/gguf"`。

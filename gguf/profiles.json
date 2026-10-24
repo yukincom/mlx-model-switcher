@@ -1,0 +1,82 @@
+{
+  "models_root": "~/.cache/gguf/models",
+  "binary": "runtime/bin/llama-server",
+  "profiles": [
+    {
+      "alias": "gguf:Qwen3.8-Flash-Next-125B",
+      "model": "Qwen3.8-Flash-Next-125B-IQ3_XXS",
+      "name": "Qwen3.8-Flash-Next-125B",
+      "manifest": "models-manifest.json",
+      "target": "125b",
+      "model_file": "Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
+      "required_verifications": [
+        "evidence/download-verified.json"
+      ],
+      "arguments": [
+        "-md",
+        "{model:mtp-Qwen3.8-Flash-Next-Q8_0.gguf}",
+        "--spec-type",
+        "draft-mtp",
+        "--spec-draft-n-max",
+        "7",
+        "-ngl",
+        "99",
+        "-c",
+        "16384",
+        "-np",
+        "1"
+      ],
+      "environment": {
+        "GGML_ALLOC_FREE_DELAY": "4",
+        "LLAMA_GRAPH_CACHE": "16",
+        "LLAMA_SPEC_MTP_MERGE": "1",
+        "LLAMA_SPEC_STOP": "1"
+      },
+      "unset_environment": []
+    },
+    {
+      "alias": "gguf:Gemma-4-26B-A4B-QAT-UD-Q4_K_XL",
+      "model": "Gemma-4-26B-A4B-QAT-UD-Q4_K_XL",
+      "name": "Gemma-4-26B-QAT-UD-Q4_K_XL",
+      "manifest": "gemma4-qat-manifest.json",
+      "target": "gemma-gguf",
+      "model_file": "gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+      "required_verifications": [
+        "evidence/gemma4-qat-2026-10-17/download-verified.json",
+        "evidence/gemma4-qat-2026-10-17/mmproj-verified.json",
+        "evidence/gemma4-qat-2026-10-17/mtp-verified.json"
+      ],
+      "arguments": [
+        "--mmproj",
+        "{model:mmproj-F16.gguf}",
+        "-md",
+        "{model:mtp-gemma-4-26B-A4B-it.gguf}",
+        "--spec-type",
+        "draft-mtp",
+        "--spec-draft-n-max",
+        "2",
+        "-ngld",
+        "99",
+        "-b",
+        "2048",
+        "-ub",
+        "2048",
+        "-ngl",
+        "99",
+        "-c",
+        "65536",
+        "-np",
+        "1"
+      ],
+      "environment": {
+        "GGML_ALLOC_FREE_DELAY": "4",
+        "LLAMA_GRAPH_CACHE": "16"
+      },
+      "unset_environment": [
+        "LLAMA_SPEC_MTP_MERGE",
+        "LLAMA_SPEC_STOP",
+        "LLAMA_SPEC_STOP_PARAMS"
+      ]
+    }
+  ]
+}

@@ -2,6 +2,8 @@
 
 モデル一覧・キャッシュの登録候補・表示名・デフォルト・起動停止・Thinking・削除確認と削除保護をSwiftへ移行した。AppKit/WKWebViewのshellと管理HTTP/SSEに加え、モデル操作も同じネイティブプロセスで実行する。管理用Python workerとその起動記録スクリプトは廃止する。MLX-LMの推論とビルド・テスト・計測ツールでは引き続きPythonを使う。
 
+同日に移設されたGGUF runtime・manifest・共有キャッシュの配置を維持し、`gguf/server.py` の起動引数と環境変数を `gguf/profiles.json` に移した。Gemmaの画像・MTP・context 65536と、Qwenの分割本体・MTP・context 16384を保持する。
+
 `native/ManagerModelStore.swift` はモデル・キャッシュ・設定を扱い、`native/ManagerRuntime.swift` は引数配列によるプロセス同一性、起動停止、操作の排他を扱う。GGUFの起動設定はJSONへ移し、Swiftが検証済みファイルを引数にしてllama.cppを直接起動する。起動記録の保存に失敗した場合は、その操作が生成した未回収の子プロセスだけを終了する。
 
 「起動を受け付けました。読込みを確認しています。」という固定通知を削除した。読込中・稼働中・停止中は、起動記録・ログの変更とPID終了イベントから得る現在の状態に表示を統一する。管理画面に定期ポーリングは追加しない。
