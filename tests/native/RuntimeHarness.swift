@@ -9,12 +9,19 @@ final class FixtureInspector: ProcessInspecting {
     var startedHook: ((Int32) throws -> String)?
     var commandHook: ((Int32) throws -> String)?
     private var startedIndex = 0
+    private var listenerIndex = 0
+    private var argumentsIndex = 0
+    private var ownerIndex = 0
 
     init(_ fixture: [String: Any]) { self.fixture = fixture }
     private var pid: Int32 { (fixture["pid"] as? NSNumber)?.int32Value ?? 424242 }
 
     func listenerPID() throws -> Int32? {
         if fixture["listener_error"] as? Bool == true { throw ManagerError("fixture listener unavailable") }
+        if let sequence = fixture["listener_sequence"] as? [Any], !sequence.isEmpty {
+            defer { listenerIndex += 1 }
+            return (sequence[min(listenerIndex, sequence.count - 1)] as? NSNumber)?.int32Value
+        }
         return (fixture["listener"] as? NSNumber)?.int32Value
     }
     func command(_ candidate: Int32) throws -> String {
@@ -31,7 +38,21 @@ final class FixtureInspector: ProcessInspecting {
         return fixture["started"] as? String ?? ""
     }
     func arguments(_ candidate: Int32) throws -> [String] {
-        candidate == pid ? fixture["arguments"] as? [String] ?? [] : []
+        if fixture["arguments_error"] as? Bool == true { throw ManagerError("fixture argv denied") }
+        guard candidate == pid else { return [] }
+        if let sequence = fixture["arguments_sequence"] as? [[String]], !sequence.isEmpty {
+            defer { argumentsIndex += 1 }
+            return sequence[min(argumentsIndex, sequence.count - 1)]
+        }
+        return fixture["arguments"] as? [String] ?? []
+    }
+    func ownerUID(_ candidate: Int32) throws -> uid_t? {
+        guard candidate == pid else { return nil }
+        if let sequence = fixture["uid_sequence"] as? [UInt32], !sequence.isEmpty {
+            defer { ownerIndex += 1 }
+            return sequence[min(ownerIndex, sequence.count - 1)]
+        }
+        return (fixture["uid"] as? NSNumber)?.uint32Value ?? geteuid()
     }
     func allCommands() throws -> String { fixture["all_commands"] as? String ?? "fixture" }
     func terminate(_ candidate: Int32) throws {
@@ -117,7 +138,7 @@ struct RuntimeHarness {
     static func failedRecordFixture(configuration: ManagerConfiguration) throws {
         let inspector = FixtureInspector(["listener": NSNull()])
         let store = ModelStore(configuration: configuration)
-        let controller = ProcessController(configuration: configuration, store: store, inspector: inspector)
+        let controller = ProcessController(configuration: configuration, store: store, inspector: inspector, readiness: { false })
         let blockedRecord = configuration.ggufRoot.appendingPathComponent("evidence/llama-server.json")
         var launchedPID: Int32?
         inspector.startedHook = { pid in
@@ -189,7 +210,7 @@ struct RuntimeHarness {
         }
         let inspector = FixtureInspector(request["process"] as? [String: Any] ?? [:])
         let store = ModelStore(configuration: configuration)
-        let controller = ProcessController(configuration: configuration, store: store, inspector: inspector)
+        let controller = ProcessController(configuration: configuration, store: store, inspector: inspector, readiness: { false })
         do {
             switch operation {
             case "status":
@@ -201,7 +222,8 @@ struct RuntimeHarness {
                 try emit(["unexpected_started_pid": pid, "terminated": inspector.terminated])
             case "blocked-stop":
                 try controller.stop(expectedPID: (request["expected_pid"] as? NSNumber)?.int32Value ?? 424242,
-                    expectedCommand: request["expected_command"] as? String ?? "")
+                    expectedCommand: request["expected_command"] as? String ?? "",
+                    expectedStarted: request["expected_started"] as? String ?? "")
                 try emit(["unexpected_stop_success": true, "terminated": inspector.terminated])
             default:
                 throw ManagerError("unsupported fixture operation")

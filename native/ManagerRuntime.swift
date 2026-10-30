@@ -97,6 +97,7 @@ protocol ProcessInspecting {
     func command(_ pid: Int32) throws -> String
     func started(_ pid: Int32) throws -> String
     func arguments(_ pid: Int32) throws -> [String]
+    func ownerUID(_ pid: Int32) throws -> uid_t?
     func allCommands() throws -> String
     func terminate(_ pid: Int32) throws
 }
@@ -120,6 +121,13 @@ final class SystemProcessInspector: ProcessInspecting {
         let result = try SystemCommand.run("/bin/ps", ["-p", String(pid), "-o", "lstart="])
         guard [0, 1].contains(result.status), result.error.isEmpty else { throw ManagerError("プロセスの開始時刻を確認できません") }
         return result.output
+    }
+    func ownerUID(_ pid: Int32) throws -> uid_t? {
+        let result = try SystemCommand.run("/bin/ps", ["-p", String(pid), "-o", "uid="])
+        guard [0, 1].contains(result.status), result.error.isEmpty else {
+            throw ManagerError("プロセスの所有者を確認できません")
+        }
+        return uid_t(result.output)
     }
     func arguments(_ pid: Int32) throws -> [String] {
         var mib = [CTL_KERN, KERN_PROCARGS2, pid]
@@ -243,11 +251,14 @@ final class ProcessController {
     let configuration: ManagerConfiguration
     let store: ModelStore
     let inspector: ProcessInspecting
+    private let inferenceReady: () -> Bool
     private let launcher = DetachedLauncher()
     let executable: String
 
     init(configuration: ManagerConfiguration, store: ModelStore,
-         inspector: ProcessInspecting = SystemProcessInspector(), executable: String = CommandLine.arguments[0]) {
+         inspector: ProcessInspecting = SystemProcessInspector(), executable: String = CommandLine.arguments[0],
+         readiness: (() -> Bool)? = nil) {
+        self.inferenceReady = readiness ?? Self.checkInferenceReady
         self.configuration = configuration
         self.store = store
         self.inspector = inspector
@@ -299,8 +310,10 @@ final class ProcessController {
 
     func status() throws -> [String: Any] {
         let listener = try inspector.listenerPID()
-        let ggufRecord = try record(configuration.ggufRoot.appendingPathComponent("evidence/llama-server.json"))
-        let mlxRecord = try record(configuration.pendingURL)
+        // Launch records describe provenance and pending launches. A missing,
+        // stale or partially written record must not disable a live listener.
+        let ggufRecord = try? record(configuration.ggufRoot.appendingPathComponent("evidence/llama-server.json"))
+        let mlxRecord = try? record(configuration.pendingURL)
         var pid = listener
         if pid == nil {
             for candidate in [ggufRecord, mlxRecord].compactMap({ $0 }) {
@@ -311,14 +324,17 @@ final class ProcessController {
                 }
             }
         }
-        var value: [String: Any] = ["running": false, "pid": NSNull(), "trusted": false,
+        var value: [String: Any] = ["running": false, "pid": NSNull(), "trusted": false, "can_stop": false,
                                      "command": "", "active_model": "", "thinking": NSNull()]
         if let pid {
+            let started = try inspector.started(pid)
+            let owner = try inspector.ownerUID(pid)
             let command = try inspector.command(pid)
-            let arguments = try inspector.arguments(pid)
-            // A process exiting between snapshots is stopped, never an inferred trusted PID.
-            if !command.isEmpty, !arguments.isEmpty {
-                let llama = URL(fileURLWithPath: arguments[0]).lastPathComponent == "llama-server"
+            // Other users' argv can be unreadable. Report ownership explicitly
+            // instead of failing the entire screen while inspecting their argv.
+            let arguments = owner == geteuid() ? try inspector.arguments(pid) : []
+            if !command.isEmpty {
+                let llama = arguments.first.map { URL(fileURLWithPath: $0).lastPathComponent == "llama-server" } ?? false
                 var model = flagValue(arguments, llama ? ["-m", "--model"] : ["--model"]) ?? ""
                 var trusted = false
                 var launchThinking = thinking(arguments)
@@ -340,8 +356,14 @@ final class ProcessController {
                         launchThinking = strictBool(mlxRecord["thinking"]) as Any? ?? launchThinking
                     }
                 }
-                value = ["running": true, "pid": pid, "trusted": trusted, "command": command,
-                         "arguments": arguments, "started": try inspector.started(pid),
+                let stable = try !started.isEmpty && inspector.started(pid) == started
+                let canStop = pid > 1 && pid != getpid() && owner == geteuid() && stable &&
+                    !arguments.isEmpty && (listener == pid || trusted)
+                let reason = owner != geteuid() ? "別のユーザーのプロセスのため、このユーザーでは停止できません。" :
+                    "対象プロセスの情報が変わりました。画面を開き直して確認してください。"
+                value = ["running": true, "pid": pid, "trusted": trusted, "can_stop": canStop,
+                         "stop_reason": canStop ? "" : reason, "listening": listener == pid, "command": command,
+                         "arguments": arguments, "started": started,
                          "active_model": model, "format": llama ? "GGUF" : "MLX", "thinking": launchThinking]
                 if listener == nil || (llama && !inferenceReady()) { value["loading"] = true }
             }
@@ -351,7 +373,7 @@ final class ProcessController {
         return value
     }
 
-    private func inferenceReady() -> Bool {
+    private static func checkInferenceReady() -> Bool {
         // One health check per actual state snapshot; events trigger this, never a timer.
         var request = URLRequest(url: URL(string: "http://127.0.0.1:8080/health")!)
         request.timeoutInterval = 1
@@ -463,23 +485,37 @@ final class ProcessController {
         return pid
     }
 
-    func stop(expectedPID: Int32, expectedCommand: String) throws {
+    func stop(expectedPID: Int32, expectedCommand: String, expectedStarted: String) throws {
+        guard expectedPID > 1, !expectedCommand.isEmpty, !expectedStarted.isEmpty else {
+            throw ManagerError("停止対象のPID・起動コマンド・開始時刻を指定してください")
+        }
         let current = try status()
         guard current["running"] as? Bool == true else { return }
-        guard (current["pid"] as? NSNumber)?.int32Value == expectedPID, current["command"] as? String == expectedCommand else {
+        guard (current["pid"] as? NSNumber)?.int32Value == expectedPID,
+              current["command"] as? String == expectedCommand,
+              current["started"] as? String == expectedStarted else {
             throw ManagerError("8080のプロセスが表示後に切り替わったため、停止しません")
         }
-        guard current["trusted"] as? Bool == true, let started = current["started"] as? String, !started.isEmpty else {
-            throw ManagerError("既知の起動記録と一致しないため、停止しません")
+        guard current["can_stop"] as? Bool == true, let arguments = current["arguments"] as? [String] else {
+            throw ManagerError(current["stop_reason"] as? String ?? "停止対象を確認できません")
         }
-        let listener = try inspector.listenerPID()
-        guard (listener == nil || listener == expectedPID), try inspector.started(expectedPID) == started,
-              try inspector.command(expectedPID) == expectedCommand else { throw ManagerError("停止直前に対象プロセスが変わりました") }
         let completion = DispatchSemaphore(value: 0)
         let exited = DispatchSource.makeProcessSource(identifier: expectedPID, eventMask: .exit, queue: .global())
         exited.setEventHandler { completion.signal() }
         exited.resume()
         defer { exited.cancel() }
+        // Stop the process the user actually saw, not whichever PID a saved
+        // launch record names. A listening process must still own port 8080;
+        // only a verified pending launch may be stopped before binding it.
+        let listener = try inspector.listenerPID()
+        let sameListener = current["listening"] as? Bool == true
+            ? listener == expectedPID : listener == nil && current["trusted"] as? Bool == true
+        guard sameListener, try inspector.ownerUID(expectedPID) == geteuid(),
+              try inspector.arguments(expectedPID) == arguments,
+              try inspector.command(expectedPID) == expectedCommand,
+              try inspector.started(expectedPID) == expectedStarted else {
+            throw ManagerError("停止直前に対象プロセスが変わりました")
+        }
         try inspector.terminate(expectedPID)
         guard completion.wait(timeout: .now() + 20) == .success else {
             throw ManagerError("サーバーはまだ終了中です。強制終了は行いません")
@@ -536,8 +572,11 @@ final class ModelOperations {
         case "/api/stop":
             guard let pid = payload["pid"] as? NSNumber, CFGetTypeID(pid) != CFBooleanGetTypeID(),
                   pid.doubleValue == Double(pid.int32Value), pid.int32Value > 1,
-                  let command = payload["command"] as? String, !command.isEmpty else { throw ManagerError("停止対象のPIDと起動コマンドを指定してください") }
-            try processes.stop(expectedPID: pid.int32Value, expectedCommand: command)
+                  let command = payload["command"] as? String, !command.isEmpty,
+                  let started = payload["started"] as? String, !started.isEmpty else {
+                throw ManagerError("停止対象のPID・起動コマンド・開始時刻を指定してください")
+            }
+            try processes.stop(expectedPID: pid.int32Value, expectedCommand: command, expectedStarted: started)
             result = try processes.status()
         case "/api/rename": try store.rename(alias: payload["alias"] as? String ?? "", name: payload["name"] as? String ?? "")
         case "/api/default":

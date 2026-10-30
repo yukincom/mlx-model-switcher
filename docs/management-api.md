@@ -2,12 +2,12 @@
 
 `MLX 8080.app`が起動している間、管理APIを `http://127.0.0.1:8766` で利用できる。推論用の8080とは別のポートである。
 
-`GET /api/health`は `app: mlx-server-manager`、`backend: swift`、`protocol: 1` を返す。`GET /api/status`はモデル一覧、現在のPID・コマンド、操作用tokenを返す。tokenは管理プロセスごとに生成されるため保存・固定しない。POSTには現在のtokenを `X-Server-Token` ヘッダーで付け、JSON objectを送る。
+`GET /api/health`は `app: mlx-server-manager`、`backend: swift`、`protocol: 3` を返す。`GET /api/status`はモデル一覧、現在のPID・コマンド・開始時刻、操作用tokenを返す。tokenは管理プロセスごとに生成されるため保存・固定しない。POSTには現在のtokenを `X-Server-Token` ヘッダーで付け、JSON objectを送る。
 
 | 操作 | メソッド・パス | JSON |
 | --- | --- | --- |
 | 起動 | `POST /api/start` | `{"alias":"登録済みalias","thinking":false}` |
-| 停止 | `POST /api/stop` | statusから取得した `pid` と `command` |
+| 停止 | `POST /api/stop` | statusから取得した `pid`, `command`, `started` |
 | 表示名変更 | `POST /api/rename` | `alias`, `name` |
 | デフォルト | `POST /api/default` | `alias` |
 | 保存済みモデル一覧 | `GET /api/cached-models` | — |
@@ -17,7 +17,9 @@
 
 `body: false`は起動一覧からの解除、`true`はモデル本体の削除。削除実行前にpreviewの対象を確認する。対象が変化した場合は再確認が必要になる。
 
-停止では表示時のPIDとコマンドの完全一致を再検査する。未知のプロセス、PIDの入れ替わり、確認できない使用状態にはシグナルを送らない。強制killは行わない。
+`server.can_stop`が画面からの停止可否を表す。起動記録が古い・欠落・破損していても、同じユーザーの現在の8080 listenerを識別できれば停止できる。`trusted`は保存された起動記録との一致を表し、停止可否とは別である。停止不可の場合は`stop_reason`を表示する。
+
+停止では表示時のPID・コマンド・開始時刻を照合し、SIGTERM直前にもlistener、所有者、開始時刻、引数配列とコマンドを再検査する。別ユーザー、PIDの入れ替わり、listenerの消失・変更にはシグナルを送らない。まだbindしていない読込中のプロセスは、一致する起動記録がある場合だけ停止できる。強制killは行わない。
 
 `GET /api/events`はSSE接続で、変更時に `event: changed` を送る。接続時と変更通知時に必要な状態を取得し、定期ポーリングはしない。CLIも共通の起動記録を書き、ログ変更とPID終了通知で画面へ反映する。管理API・起動スクリプト・設定したGGUFランチャーを全く通らない任意のプロセス起動までは監視しない。
 

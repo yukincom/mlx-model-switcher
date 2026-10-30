@@ -94,14 +94,14 @@ class NativeGGUFTests(unittest.TestCase):
     def write_profiles(self):
         (self.root / "gguf/profiles.json").write_text(json.dumps(self.config))
 
-    def launch(self, target, thinking=False):
+    def launch(self, target, thinking=False, external=False):
         capture = self.root / "captured.json"
         capture.unlink(missing_ok=True)
         environment = {**os.environ, "MLX_GGUF_FIXTURE_CAPTURE": str(capture),
                        "MLX_GGUF_FIXTURE_SENTINEL": "keep-me", "GGML_ALLOC_FREE_DELAY": "inherited-delay",
                        "LLAMA_GRAPH_CACHE": "inherited-cache", "LLAMA_SPEC_MTP_MERGE": "inherited-merge",
                        "LLAMA_SPEC_STOP": "inherited-stop", "LLAMA_SPEC_STOP_PARAMS": "inherited-params"}
-        request = {"root": str(self.root), "alias": self.profiles[target]["alias"], "thinking": thinking}
+        request = {"root": str(self.root), "alias": self.profiles[target]["alias"], "thinking": thinking, "external": external}
         result = subprocess.run([str(self.binary)], input=json.dumps(request), capture_output=True,
                                 text=True, timeout=25, env=environment)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -153,6 +153,17 @@ class NativeGGUFTests(unittest.TestCase):
         self.assertEqual(environment["GGML_ALLOC_FREE_DELAY"], "4")
         self.assertEqual(environment["LLAMA_GRAPH_CACHE"], "16")
         return environment
+
+    # 見込み: 壊れた/古い記録でも現在のlistenerを停止できる。合格: 子1個だけにSIGTERMし終了後running=false。
+    # 範囲: Swift・OS identity・実子プロセス終了。listener検索とhealth応答は模擬で、実モデルを読み込まない。
+    def test_external_restart_stops_real_fixture_child_despite_stale_and_corrupt_records(self):
+        result = self.launch("gemma-gguf", external=True)
+        self.assertTrue(result["ok"], result)
+        self.assertIs(result["running"]["trusted"], False)
+        self.assertIs(result["running"]["can_stop"], True)
+        self.assertEqual(result["terminated"], [result["pid"]])
+        self.assertEqual(result["owned"], [result["pid"]])
+        self.assertIs(result["stopped"]["running"], False)
 
     def test_qwen_thinking_modes_preserve_split_main_draft_and_context(self):
         target = "125b"

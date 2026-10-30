@@ -28,6 +28,7 @@ private final class ChildOnlyInspector: ProcessInspecting {
     private(set) var owned = Set<Int32>()
     private(set) var terminated: [Int32] = []
     private(set) var listenerQueries = 0
+    var externalPID: Int32?
 
     init(binary: URL) { self.binary = binary }
 
@@ -40,10 +41,15 @@ private final class ChildOnlyInspector: ProcessInspecting {
         owned.insert(pid)
         return true
     }
-    func listenerPID() throws -> Int32? { listenerQueries += 1; return nil }
+    func listenerPID() throws -> Int32? {
+        listenerQueries += 1
+        if let externalPID, try isOwnChild(externalPID) { return externalPID }
+        return nil
+    }
     func command(_ pid: Int32) throws -> String { try isOwnChild(pid) ? system.command(pid) : "" }
     func started(_ pid: Int32) throws -> String { try isOwnChild(pid) ? system.started(pid) : "" }
     func arguments(_ pid: Int32) throws -> [String] { try isOwnChild(pid) ? system.arguments(pid) : [] }
+    func ownerUID(_ pid: Int32) throws -> uid_t? { try isOwnChild(pid) ? system.ownerUID(pid) : nil }
     func allCommands() throws -> String { throw ManagerError("fixture does not inspect unrelated processes") }
     func terminate(_ pid: Int32) throws {
         guard owned.contains(pid), try isOwnChild(pid) else { throw ManagerError("fixture refuses unrelated process") }
@@ -88,7 +94,7 @@ struct GGUFHarness {
         let inspector = ChildOnlyInspector(binary: binary)
         defer { inspector.cleanup() }
         let store = ModelStore(configuration: configuration)
-        let controller = ProcessController(configuration: configuration, store: store, inspector: inspector)
+        let controller = ProcessController(configuration: configuration, store: store, inspector: inspector, readiness: { false })
         do {
             let pid = try controller.start(alias: alias, thinking: thinking)
             let deadline = Date().addingTimeInterval(3)
@@ -96,10 +102,18 @@ struct GGUFHarness {
                 Thread.sleep(forTimeInterval: 0.01)
             }
             let captured = try readJSONObject(captureURL)
-            let running = try controller.status()
             let record = try readJSONObject(configuration.ggufRoot.appendingPathComponent("evidence/llama-server.json"))
             let managed = try readJSONObject(configuration.ggufRoot.appendingPathComponent("evidence/managed-server.json"))
-            try controller.stop(expectedPID: pid, expectedCommand: inspector.command(pid))
+            if request["external"] as? Bool == true {
+                // Listener lookup and readiness are injected; all identity reads,
+                // SIGTERM and exit observation target this real fixture child.
+                inspector.externalPID = pid
+                try Data("{broken".utf8).write(to: configuration.pendingURL)
+                try writeJSONObject(["pid": pid + 1], to: configuration.ggufRoot.appendingPathComponent("evidence/llama-server.json"))
+            }
+            let running = try controller.status()
+            try controller.stop(expectedPID: pid, expectedCommand: running["command"] as! String,
+                                expectedStarted: running["started"] as! String)
             let stopped = try controller.status()
             try emit(["ok": true, "pid": pid, "harness_pid": getpid(), "capture": captured,
                       "running": running, "stopped": stopped, "record": record, "managed_record": managed,

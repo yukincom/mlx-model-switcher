@@ -154,7 +154,7 @@ class NativeManagerTests(unittest.TestCase):
             status, headers, data = self.request(port, "GET", "/api/health")
             self.assertEqual(status, 200)
             health = json.loads(data)
-            self.assertEqual((health["backend"], health["protocol"]), ("swift", 2))
+            self.assertEqual((health["backend"], health["protocol"]), ("swift", 3))
             configuration = health["configuration"]
             for key, directory in (("resources", ""), ("server_root", "launcher"), ("gguf_root", "gguf"),
                                    ("state_root", "state"), ("cache_root", "cache")):
@@ -225,6 +225,8 @@ class NativeManagerTests(unittest.TestCase):
             self.assertEqual(json.loads((resources / "state/models.json").read_text())["default_alias"], "b")
             self.assertFalse((resources / "state/starting.json").exists())
 
+    # 見込み: 不完全な停止identityや型違いは操作前に拒否。合格: 全要求が400で設定が不変。
+    # 範囲: 実HTTP/Swift、fixture設定。実推論の停止要求は送らない。
     def test_strict_payload_types_reject_process_and_delete_operations(self):
         with self.server() as (port, resources, _):
             token = self.token(port)
@@ -232,7 +234,10 @@ class NativeManagerTests(unittest.TestCase):
                 ("/api/start", {"alias": "a", "thinking": "false"}),
                 ("/api/start", {"alias": "a", "thinking": 1}),
                 ("/api/stop", {"pid": True, "command": "fixture"}),
-                ("/api/stop", {"pid": 123.5, "command": "fixture"}),
+                ("/api/stop", {"pid": 123.5, "command": "fixture", "started": "fixture"}),
+                ("/api/stop", {"pid": 123, "command": "fixture"}),
+                ("/api/stop", {"pid": 123, "command": "fixture", "started": ""}),
+                ("/api/stop", {"pid": 123, "command": "fixture", "started": 123}),
                 ("/api/delete", {"alias": "a", "body": "true"}),
                 ("/api/delete-preview", {"aliases": "a", "body": False}),
             ]:

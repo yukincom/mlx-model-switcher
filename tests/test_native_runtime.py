@@ -1,4 +1,7 @@
-"""Native process identity and lifecycle guards; never start a real model or use 8080."""
+"""見込み: 停止権限を実プロセスで判定すれば、古い記録でも停止できる。
+合格: 同一ユーザーの対象だけが停止処理へ進み、表示後の入替は送信ゼロ。
+範囲: 実Swift判定・模擬OS観測。シグナルは模擬。実終了はGGUFの子プロセス試験で確認。
+"""
 import json
 import os
 from pathlib import Path
@@ -44,6 +47,8 @@ class NativeRuntimeTests(unittest.TestCase):
         (self.root / "launcher/models.conf").write_text("fixture=owner/Fixture-4bit\n", encoding="utf-8")
 
     def request(self, operation, process=None, **values):
+        if operation == "blocked-stop":
+            values.setdefault("expected_started", STARTED)
         payload = {"operation": operation, "root": str(self.root), **values}
         if process is not None:
             payload["process"] = process
@@ -165,10 +170,17 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertIsNone(server["pid"])
         self.assertIs(server["trusted"], False)
 
-    def test_known_module_without_own_record_is_untrusted(self):
-        server = self.request("status", self.mlx_process())["server"]
+    # 見込み: 起動記録がなくても実listenerは停止可能。合格: can_stopがtrueで実停止境界へ1回進む。
+    # 範囲: Swift判定と模擬signal。実サーバーは起動・停止しない。
+    def test_known_module_without_record_can_be_stopped(self):
+        process = self.mlx_process()
+        server = self.request("status", process)["server"]
         self.assertIs(server["running"], True)
         self.assertIs(server["trusted"], False)
+        self.assertIs(server["can_stop"], True)
+        result = self.request("blocked-stop", process, expected_pid=PID, expected_command=process["command"])
+        self.assertEqual(result["terminated"], [PID])
+        self.assertEqual(result["error"], "fixture refuses all signals")
 
     def test_matching_record_and_port_trust_the_mlx_process(self):
         self.record_mlx(thinking=False)
@@ -187,12 +199,14 @@ class NativeRuntimeTests(unittest.TestCase):
         process["command"] = " ".join(process["arguments"])
         self.assertIs(self.request("status", process)["server"]["trusted"], False)
 
-    def test_reused_pid_is_untrusted_and_cannot_be_stopped(self):
+    # 見込み: 同じPIDとcommandでも開始時刻が違えば別プロセス。合格: 古い画面の停止要求は送信ゼロ。
+    # 範囲: OS観測は模擬。新しい画面では同じユーザーの現listenerとして停止可能。
+    def test_reused_pid_rejects_stale_display_even_with_the_same_command(self):
         self.record_mlx()
         process = self.mlx_process(started="Sat Oct 24 10:00:00 2026")
         self.assertIs(self.request("status", process)["server"]["trusted"], False)
         self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
-                                        expected_command=process["command"]), "既知の起動記録")
+                                        expected_command=process["command"]), "表示後に切り替わった")
 
     def test_reused_pending_pid_is_not_reported_as_loading(self):
         self.record_mlx()
@@ -209,11 +223,13 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(server["active_model"], "owner/Fixture-4bit")
         self.assertBlocked(self.request("blocked-start", process), "すでに稼働中")
 
-    def test_unknown_listener_blocks_start_and_stop(self):
+    # 見込み: 管理対象は8080の実listener。合格: 未登録の同一ユーザーのプロセスも表示対象の確認後に停止可能。
+    # 範囲: 模擬OS/signal。新規起動の二重bindは禁止のまま。
+    def test_unregistered_owned_listener_can_stop_but_blocks_another_start(self):
         process = self.mlx_process(arguments=["/fixture/other-service", "--port", "8080"])
         self.assertBlocked(self.request("blocked-start", process), "すでに稼働中")
-        self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
-                                        expected_command=process["command"]), "既知の起動記録")
+        result = self.request("blocked-stop", process, expected_pid=PID, expected_command=process["command"])
+        self.assertEqual(result["terminated"], [PID])
 
     def test_listener_inspection_error_blocks_start(self):
         process = {**self.mlx_process(listener=None), "listener_error": True}
@@ -227,9 +243,11 @@ class NativeRuntimeTests(unittest.TestCase):
                 self.assertBlocked(self.request("blocked-stop", process, expected_pid=pid,
                                                 expected_command=command), "表示後に切り替わった")
 
+    # 見込み: 状態取得後も開始時刻を再照合する。合格: signal直前の入替で送信ゼロ。
+    # 範囲: status内3回の時刻取得は同じ、停止直前の4回目だけ変える模擬OS。
     def test_identity_change_immediately_before_stop_never_signals(self):
         self.record_mlx()
-        process = {**self.mlx_process(), "started_sequence": [STARTED, STARTED, "Sat Oct 24 11:00:00 2026"]}
+        process = {**self.mlx_process(), "started_sequence": [STARTED] * 3 + ["Sat Oct 24 11:00:00 2026"]}
         self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
                                         expected_command=process["command"]), "停止直前に対象プロセスが変わりました")
 
@@ -262,6 +280,59 @@ class NativeRuntimeTests(unittest.TestCase):
             with self.subTest(change=change):
                 record_file.write_text(json.dumps({**original, **change}))
                 self.assertIs(self.request("status", process)["server"]["trusted"], False)
+
+    # 見込み: 古い・壊れた起動記録は停止の根拠にしない。合格: 両記録の状態に関係なく現listenerを停止可能。
+    # 範囲: 一時JSONと実Swift。プロセス情報とsignalは模擬。
+    def test_stale_or_corrupt_records_do_not_disable_live_stop(self):
+        process = self.gguf_process(pid=PID - 1)
+        process["listener"] = PID
+        for bad in (json.dumps({"pid": PID - 1, "started": STARTED}), "{broken"):
+            with self.subTest(record=bad):
+                (self.root / "gguf/evidence/llama-server.json").write_text(bad)
+                (self.root / "state/starting.json").write_text(bad)
+                server = self.request("status", process)["server"]
+                self.assertIs(server["trusted"], False)
+                self.assertIs(server["can_stop"], True)
+                result = self.request("blocked-stop", process, expected_pid=PID, expected_command=process["command"])
+                self.assertEqual(result["terminated"], [PID])
+
+    # 見込み: 他ユーザーのargvは読まず停止不可にする。合格: runningの表示を保ち、理由が出てsignalゼロ。
+    # 範囲: UIDとargvアクセス拒否は模擬。実OSの権限変更は行わない。
+    def test_foreign_listener_does_not_read_argv_or_allow_stop(self):
+        process = {**self.mlx_process(), "uid": os.geteuid() + 1, "arguments_error": True}
+        server = self.request("status", process)["server"]
+        self.assertIs(server["running"], True)
+        self.assertIs(server["can_stop"], False)
+        self.assertIn("別のユーザー", server["stop_reason"])
+        self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
+                                        expected_command=process["command"]), "別のユーザー")
+
+    # 見込み: 表示後に8080を解放・別PIDへ移動したプロセスは止めない。合格: 両条件でsignalゼロ。
+    # 範囲: listener取得の2回目のみ変更する模擬OS。
+    def test_listener_disappearing_or_changing_before_stop_never_signals(self):
+        for later in (None, PID + 1):
+            with self.subTest(listener=later):
+                process = {**self.mlx_process(), "listener_sequence": [PID, later]}
+                self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
+                                                expected_command=process["command"]), "停止直前")
+
+    # 見込み: UID/argvもsignal直前に再照合する。合格: command文字列が同じでも変化を検出しsignalゼロ。
+    # 範囲: それぞれ2回目のOS観測だけ変える模擬入力。
+    def test_owner_or_argument_change_before_stop_never_signals(self):
+        original = self.mlx_process()
+        for change in ({"uid_sequence": [os.geteuid(), os.geteuid() + 1]},
+                       {"arguments_sequence": [original["arguments"], ["different", "boundaries"]]}):
+            with self.subTest(change=change):
+                process = {**original, **change}
+                self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
+                                                expected_command=process["command"]), "停止直前")
+
+    # 見込み: 現在の開始時刻を省略した停止は拒否する。合格: 空文字の停止要求でsignalゼロ。
+    # 範囲: 直接Swift呼出し。HTTP入力の拒否はHTTP試験でも検証する。
+    def test_stop_requires_displayed_start_time(self):
+        process = self.mlx_process()
+        self.assertBlocked(self.request("blocked-stop", process, expected_pid=PID,
+                                        expected_command=process["command"], expected_started=""), "開始時刻")
 
 
 if __name__ == "__main__":

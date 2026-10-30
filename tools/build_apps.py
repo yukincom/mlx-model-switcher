@@ -75,7 +75,7 @@ def build(output: Path, server_root: Path, gguf_root: Path | None) -> Path:
             "CFBundleName": "MLX 8080", "CFBundleDisplayName": "MLX 8080",
             "CFBundleExecutable": "MLXAppShell", "CFBundleIdentifier": IDENTIFIER,
             "CFBundlePackageType": "APPL", "CFBundleShortVersionString": "2.0",
-            "CFBundleVersion": "3", "CFBundleIconFile": "AppIcon",
+            "CFBundleVersion": "4", "CFBundleIconFile": "AppIcon",
             "LSMinimumSystemVersion": "14.0", "NSHighResolutionCapable": True,
             "NSAppTransportSecurity": {"NSAllowsLocalNetworking": True},
             "MLXBackendIdentity": "mlx-server-manager", "MLXBackendPort": 8766,

@@ -38,15 +38,15 @@ function render() {
   $('#state-pill').textContent = waiting ? '◌ 読込中' : running ? '● 稼働中' : '○ 停止中';
   $('#status-title').textContent = waiting ? 'モデルを読込中' : running ? '稼働中' : '停止中';
   const runningItem = current.models.find(item => active(item));
-  const runningName = runningItem?.name || server.active_model || 'モデル名を取得できません';
+  const runningName = runningItem?.name || server.active_name || server.active_model || '8080を使用中のプロセス';
   $('#model-name').textContent = running ? runningName : '—';
   $('#process-id').textContent = running ? `PID ${server.pid}` : '—';
   $('#status-detail').textContent = running
-    ? (server.trusted ? '' : '起動記録を確認できないため、この画面からは停止できません。')
+    ? (server.can_stop ? '' : server.stop_reason || '停止対象を確認できません。')
     : '';
   const items = sortedModels();
   if (!items.some(item => item.alias === selectedAlias)) selectedAlias = current.default_alias;
-  $('#controls').innerHTML = `<div class="start-controls"><select id="start-alias" aria-label="起動するモデル">${running && !runningItem ? `<option value="">${esc(runningName)}</option>` : ''}${items.map(item => `<option value="${esc(item.alias)}">${item.alias === current.default_alias ? '★ ' : ''}${esc(item.name)} / ${esc(item.format)} / ${size(item.size_bytes)}</option>`).join('')}</select><label class="thinking-toggle${locked ? ' disabled' : ''}" title="停止中に変更できます"><input type="checkbox" id="thinking-enabled">Thinking ON</label><button id="start" ${locked || !items.length ? 'disabled' : ''}>${waiting ? '読込中…' : '起動'}</button>${running ? `<button id="stop" class="danger" ${server.trusted && !busy ? '' : 'disabled'}>停止</button>` : ''}</div>`;
+  $('#controls').innerHTML = `<div class="start-controls"><select id="start-alias" aria-label="起動するモデル">${running && !runningItem ? `<option value="">${esc(runningName)}</option>` : ''}${items.map(item => `<option value="${esc(item.alias)}">${item.alias === current.default_alias ? '★ ' : ''}${esc(item.name)} / ${esc(item.format)} / ${size(item.size_bytes)}</option>`).join('')}</select><label class="thinking-toggle${locked ? ' disabled' : ''}" title="停止中に変更できます"><input type="checkbox" id="thinking-enabled">Thinking ON</label><button id="start" ${locked || !items.length ? 'disabled' : ''}>${waiting ? '読込中…' : '起動'}</button>${running ? `<button id="stop" class="danger" ${server.can_stop && !busy ? '' : 'disabled'}>停止</button>` : ''}</div>`;
   $('#start-alias').value = running ? (runningItem?.alias || '') : selectedAlias;
   $('#start-alias').disabled = locked;
   $('#start-alias').addEventListener('change', event => { selectedAlias = event.target.value; });
@@ -65,8 +65,10 @@ function render() {
     if (!locked) run('/api/start', {alias: selectedAlias, thinking: thinkingEnabled}, '');
   });
   $('#stop')?.addEventListener('click', () => {
-    if (confirm(`8080のモデルを停止しますか？\n${runningName}\nPID: ${server.pid}`))
-      run('/api/stop', {pid: server.pid, command: server.command}, '停止しました。');
+    if (!server.can_stop || busy) return;
+    const details = server.trusted ? '' : `\n${server.command}`;
+    if (confirm(`8080のプロセスを停止しますか？\n${runningName}\nPID: ${server.pid}${details}`))
+      run('/api/stop', {pid: server.pid, command: server.command, started: server.started}, '停止しました。');
   });
   $('#model-sort').value = sortOrder;
   for (const alias of checkedAliases) {

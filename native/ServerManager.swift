@@ -303,7 +303,7 @@ final class Manager {
         if request.method == "GET" {
             guard request.body.isEmpty else { completion(.error(400, "unexpected body")); return }
             if request.path == "/api/health" {
-                completion(.json(["app": "mlx-server-manager", "backend": "swift", "protocol": 2,
+                completion(.json(["app": "mlx-server-manager", "backend": "swift", "protocol": 3,
                                   "configuration": configurationIdentity])); return
             }
             if request.path == "/api/events" { completion(.events()); return }

@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                (response as? HTTPURLResponse)?.statusCode == 200,
                let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                payload["app"] as? String == self.expectedApp {
-                ready = payload["backend"] as? String == "swift" && payload["protocol"] as? Int == 2
+                ready = payload["backend"] as? String == "swift" && payload["protocol"] as? Int == 3
                     && payload["configuration"] as? [String: String] == self.expectedBackendConfiguration
                 self.incompatibleBackend = !ready
             }
