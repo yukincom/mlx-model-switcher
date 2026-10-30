@@ -15,4 +15,6 @@
 - 実際のテスト用子プロセスについて、古い記録と壊れた記録が共存してもSIGTERMで終了することを確認した。listener検索とhealth応答はfixtureへ差し替え、実モデルは起動・停止しない。
 - UI試験では`trusted=false`でも`can_stop=true`なら停止でき、表示時の`started`を送ることを確認した。取消・停止不可・操作中は停止要求を送らない。
 
-アプリ更新後の画面確認は別途記録する。
+- `/Applications/MLX 8080.app`を更新し、ビルドと署名検証が成功した。管理protocolは3、bundle versionは4。
+- 実画面ではPID 80818の停止ボタンが有効になり、停止確認ダイアログに現在のモデル・PID・コマンドが表示された。確認はキャンセルし、既存Gemmaは停止・再起動していない。
+- 更新後の管理APIは`running=true, can_stop=true, trusted=false`。PIDと開始時刻は更新前と一致し、`models.conf`・`gguf/profiles.json`・表示名/デフォルト設定のハッシュも保持された。
